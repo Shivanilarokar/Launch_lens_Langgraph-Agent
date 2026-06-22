@@ -1,0 +1,24 @@
+flowchart TD
+    U([Founder's question]) --> MM
+    MM["manage_memory<br/>SHORT-TERM MEMORY: summarize + prune long chats"]:::mem --> R
+    R{"router<br/>ROUTING: classify intent"}:::route
+    R -->|followup| AG
+    R -->|"demand / pricing / reviews / full report"| FO
+    subgraph FO["FAN-OUT: parallel Send() across engines"]
+      direction LR
+      WT["Google Trends"]:::fan
+      WS["Google Shopping"]:::fan
+      WN["Google News"]:::fan
+      WA["Amazon search"]:::fan
+    end
+    FO --> AG
+    AG["agent<br/>AGENT + TOOLS: FUSE demand x supply"]:::agent
+    AG <-->|ReAct tool loop| TL["Tools (slim JSON)<br/>SerpApi: trends, shopping, news<br/>Oxylabs: search, product(reviews), pricing, bestsellers"]:::agent
+    AG --> V["Go / No-Go / Niche verdict"]:::agent --> RM
+    RM["remember<br/>LONG-TERM MEMORY: save verdict as cross-thread fact"]:::mem --> E([END])
+    CP[("Checkpointer - short-term<br/>Redis / SQLite fallback")]:::mem -.->|per-thread state| AG
+    LT[("Store - long-term<br/>facts across ALL threads")]:::mem -.->|recall + save| AG
+    classDef mem fill:#e8f0fe,stroke:#1a73e8,color:#1a3a6b;
+    classDef route fill:#fef7e0,stroke:#f9ab00,color:#5f4500;
+    classDef fan fill:#e6f4ea,stroke:#34a853,color:#0b5132;
+    classDef agent fill:#fce8e6,stroke:#ea4335,color:#5f1b14;

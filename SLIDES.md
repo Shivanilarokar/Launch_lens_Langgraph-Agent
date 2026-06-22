@@ -15,7 +15,7 @@ shivani · LangGraph for Production AI Agents · Assignment 3
 - Nobody connects the two. → A product looks great on demand but is saturated on supply (or vice versa).
 
 ## Slide 3 — The product
-A founder chats: *"Launch a steel insulated bottle in India under ₹1,500?"*
+A founder chats: *"Launch a steel insulated bottle in "regenerate slides as PDF".India under ₹1,500?"*
 LaunchLens answers: **GO / NO-GO / NICHE** + demand read + price band + differentiation + positioning.
 …and remembers the conversation ("what about the US market?").
 
