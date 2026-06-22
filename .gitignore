@@ -1,0 +1,33 @@
+# ─── Reference material — NOT part of the LaunchLens submission ───────────────
+# reference/ holds worked examples (e.g. marketpulse) we borrow patterns from.
+reference/
+
+# Secrets
+.env
+**/.env
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+
+# Virtual environments
+.venv
+
+# Local data
+.cache/
+*.sqlite
+*.sqlite-*
+
+# Frontend
+node_modules/
+**/node_modules/
+**/dist/
+
+docs
+reference
+.claude1
