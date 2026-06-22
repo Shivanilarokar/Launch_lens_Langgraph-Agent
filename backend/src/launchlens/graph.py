@@ -1,10 +1,12 @@
 """Graph construction & wiring (concept 1).
 
-    START → manage_memory → router ─┬─(Send fan-out)→ serpapi_worker ─┐
-                                    │                  oxylabs_worker ─┤
-                                    └─("agent" followup)──────────────┤
-                                                                      ▼
-                                                          agent ⇄ tools → END
+    START → manage_memory → router ─┬─(Send fan-out)→ pull_trends ──┐
+                                    │                  pull_shopping ┤
+                                    │                  pull_news ────┤
+                                    │                  pull_amazon ──┤
+                                    └─("agent" followup)─────────────┤
+                                                                     ▼
+                                                  agent ⇄ tools → remember → END
 """
 import logging
 
@@ -38,9 +40,16 @@ def build_graph(checkpointer, store=None):
 
     g.add_node("manage_memory", nodes.manage_memory)
     g.add_node("router", nodes.router)
+    # concept 2: one node per research engine = visible parallel branches.
     # External-service nodes get exponential-backoff retries on transient failures.
-    g.add_node("serpapi_worker", nodes.serpapi_worker, retry_policy=RETRY)
-    g.add_node("oxylabs_worker", nodes.oxylabs_worker, retry_policy=RETRY)
+    PARALLEL = {
+        "pull_trends": nodes.pull_trends,
+        "pull_shopping": nodes.pull_shopping,
+        "pull_news": nodes.pull_news,
+        "pull_amazon": nodes.pull_amazon,
+    }
+    for name, fn in PARALLEL.items():
+        g.add_node(name, fn, retry_policy=RETRY)
     g.add_node("agent", nodes.agent, retry_policy=RETRY)
     g.add_node("tools", ToolNode(tools.ALL_TOOLS, handle_tool_errors=True),
                retry_policy=RETRY)
@@ -48,13 +57,12 @@ def build_graph(checkpointer, store=None):
 
     g.add_edge(START, "manage_memory")
     g.add_edge("manage_memory", "router")
-    # concepts 3 + 2: route to a parallel fan-out, or straight to the agent.
+    # concepts 3 + 2: router fans OUT to parallel engine nodes (Send), or to agent.
     g.add_conditional_edges(
-        "router", nodes.route_research,
-        ["serpapi_worker", "oxylabs_worker", "agent"],
+        "router", nodes.route_research, [*PARALLEL.keys(), "agent"],
     )
-    g.add_edge("serpapi_worker", "agent")
-    g.add_edge("oxylabs_worker", "agent")
+    for name in PARALLEL:                       # every branch merges at the agent
+        g.add_edge(name, "agent")
     # concept 4: the agent ⇄ tools ReAct loop; on finish, persist to long-term memory.
     g.add_conditional_edges("agent", nodes.should_continue, ["tools", "remember"])
     g.add_edge("tools", "agent")

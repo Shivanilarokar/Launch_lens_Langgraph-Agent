@@ -34,12 +34,12 @@ keeps fan-out merges correct *and* avoids signals leaking across turns.
 
 ## Concept 2 — Fan-out / parallel (`nodes.py route_research`, workers; `graph.py`)
 **Q: Show me it's really parallel, not sequential.**
-`route_research` (`nodes.py:152`) returns a **list of `Send`** objects from a conditional
-edge — e.g. `[Send("serpapi_worker", {engine:"google_trends"...}), Send("serpapi_worker",
-{...shopping}), Send("oxylabs_worker", {...amazon})]`. LangGraph runs all `Send`s in the
-**same super-step**, so the engines fire concurrently. You can see it in the CLI: the
-worker log lines interleave. They merge at `agent` because both worker edges point to it,
-and results combine through the reducer.
+`route_research` (`nodes.py:170`) returns a **list of `Send`** objects from a conditional
+edge — e.g. `[Send("pull_trends", {...}), Send("pull_shopping", {...}),
+Send("pull_news", {...}), Send("pull_amazon", {...})]`. Each engine is its **own node**
+(`pull_trends/pull_shopping/pull_news/pull_amazon`, `nodes.py:206-221`), so the graph shows
+real parallel branches. LangGraph runs all `Send`s in the **same super-step**, so they fire
+concurrently and all branch edges point to `agent`, where the reducer merges their results.
 
 **Q: What if two workers write at once?** That's exactly why the reducer exists — each
 returns `{"demand_signals":[one_signal]}` and the reducer concatenates; nothing is lost.
@@ -48,7 +48,7 @@ returns `{"demand_signals":[one_signal]}` and the reducer concatenates; nothing 
 
 ## Concept 3 — Routing (`nodes.py router` + `route_research`)
 **Q: How does routing work?**
-`router` (`nodes.py:128`) calls the LLM with **structured output** (`Routing` pydantic
+`router` (`nodes.py:133`) calls the LLM with **structured output** (`Routing` pydantic
 model) to classify intent into `full_report | demand | pricing | reviews | followup` and
 extract the product + market. `route_research` then maps intent → which engines to fan out
 (or straight to `agent` for a followup). There's a **heuristic fallback** if structured
@@ -62,9 +62,9 @@ SerpApi engines fire (saves Oxylabs credits).
 
 ## Concept 4 — Agent + tools (`nodes.py agent`, `tools.py`)
 **Q: Walk me through the agent loop.**
-`agent` (`nodes.py:241`) binds all tools (`tools.ALL_TOOLS`) to the LLM and is prompted to
+`agent` (`nodes.py:293`) binds all tools (`tools.ALL_TOOLS`) to the LLM and is prompted to
 **fuse** the gathered demand+supply signals into the verdict. `should_continue`
-(`nodes.py:247`) sends it to the `ToolNode` if it emitted tool calls, else to `remember`.
+(`nodes.py:299`) sends it to the `ToolNode` if it emitted tool calls, else to `remember`.
 `tools → agent` closes the ReAct loop.
 
 **Q: Why don't tools return raw scrapes?**
@@ -86,7 +86,7 @@ after every node, keyed by `thread_id`. Restart the process, pass the same `thre
 and the conversation continues because the process never held the memory.
 
 **Q: How does summarization work without breaking tool calls?**
-`manage_memory` (`nodes.py:74`): when a thread passes `MAX_MESSAGES` (12), it summarizes the
+`manage_memory` (`nodes.py:79`): when a thread passes `MAX_MESSAGES` (12), it summarizes the
 older messages into `summary` and deletes them with `RemoveMessage`, keeping the last
 `KEEP_LAST` (6). Crucially it cuts on a **human-message boundary**, so it never orphans an
 assistant tool-call from its tool-result (which the LLM API would reject).
@@ -97,15 +97,16 @@ assistant tool-call from its tool-result (which the LLM API would reject).
 **Q: How is this different from the checkpointer?**
 The checkpointer is **per-thread** (one conversation). The **`Store`** (`memory.py:44`,
 Redis) is **cross-thread** — verdict facts live under namespace `("launchlens","facts")`
-and are visible in *every* thread. `remember` (`nodes.py:288`) writes each verdict;
-`_recall_facts` (`nodes.py:253`) lets the agent recall it. Demo: research a product, start
+and are visible in *every* thread. `remember` (`nodes.py:307`) writes each verdict;
+`_recall_facts` (`nodes.py:272`) lets the agent recall it. Demo: research a product, start
 a brand-new chat, ask "did we look at this before?" → it recalls without re-researching.
 
 ---
 
 ## Robustness & cost
-- **Retries:** every external node (`serpapi_worker`, `oxylabs_worker`, `agent`, `tools`)
-  has a `RetryPolicy` with **exponential backoff** (1s→2s→4s) — `graph.py RETRY`.
+- **Retries:** every external node (`pull_trends`, `pull_shopping`, `pull_news`,
+  `pull_amazon`, `agent`, `tools`) has a `RetryPolicy` with **exponential backoff**
+  (1s→2s→4s) — `graph.py RETRY`.
 - **Caching:** provider responses are cached on disk with a TTL (`cache.py`,
   `CACHE_TTL`), so repeat queries don't re-spend the SerpApi free tier / Oxylabs credits.
 - **Graceful degradation:** tool errors become error-JSON (`safe`), worker errors become

@@ -7,8 +7,10 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	manage_memory(manage_memory)
 	router(router)
-	serpapi_worker(serpapi_worker)
-	oxylabs_worker(oxylabs_worker)
+	pull_trends(pull_trends)
+	pull_shopping(pull_shopping)
+	pull_news(pull_news)
+	pull_amazon(pull_amazon)
 	agent(agent)
 	tools(tools)
 	remember(remember)
@@ -17,11 +19,15 @@ graph TD;
 	agent -.-> remember;
 	agent -.-> tools;
 	manage_memory --> router;
-	oxylabs_worker --> agent;
+	pull_amazon --> agent;
+	pull_news --> agent;
+	pull_shopping --> agent;
+	pull_trends --> agent;
 	router -.-> agent;
-	router -.-> oxylabs_worker;
-	router -.-> serpapi_worker;
-	serpapi_worker --> agent;
+	router -.-> pull_amazon;
+	router -.-> pull_news;
+	router -.-> pull_shopping;
+	router -.-> pull_trends;
 	tools --> agent;
 	remember --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2

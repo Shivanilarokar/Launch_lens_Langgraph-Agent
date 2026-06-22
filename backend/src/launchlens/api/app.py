@@ -58,9 +58,9 @@ def _research_event(node: str, upd: dict) -> dict:
     if node == "router":
         return {"node": node, "route": upd.get("route"),
                 "query": upd.get("product_query"), "domain": upd.get("domain")}
-    if node == "serpapi_worker":
+    if "demand_signals" in upd:  # pull_trends / pull_shopping / pull_news
         return {"node": node, "side": "demand", "signal": (upd.get("demand_signals") or [{}])[0]}
-    if node == "oxylabs_worker":
+    if "supply_signals" in upd:  # pull_amazon
         return {"node": node, "side": "supply", "signal": (upd.get("supply_signals") or [{}])[0]}
     return {"node": node}
 
@@ -79,7 +79,7 @@ def chat(req: ChatRequest):
                     for node, upd in chunk.items():
                         if not upd:
                             continue
-                        if node in ("router", "serpapi_worker", "oxylabs_worker"):
+                        if node == "router" or node.startswith("pull_"):
                             yield _sse("research", _research_event(node, upd))
                         elif node == "agent":
                             m = upd["messages"][-1]

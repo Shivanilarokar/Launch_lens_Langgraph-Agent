@@ -3,8 +3,8 @@
   manage_memory   concept 5  summarize long threads + reset per-turn scratchpad
   router          concept 3  classify the user's intent, extract product + market
   route_research  concept 2  fan out Send() jobs across individual engines
-  serpapi_worker  concept 2  one demand engine, in parallel
-  oxylabs_worker  concept 2  one supply source, in parallel
+  pull_trends/shopping/news  concept 2  demand engines, each its own parallel branch
+  pull_amazon                concept 2  supply source, parallel branch
   agent           concept 4  fuse demand + supply into a Go/No-Go/Niche verdict (ReAct)
 """
 import json
@@ -154,9 +154,22 @@ def router(state: LaunchLensState) -> dict:
 
 
 # ─────────────────────── concept 2: fan-out via Send ──────────────────────────
+# Each research engine is its OWN node, so the graph shows real parallel branches
+# (pull_trends ‖ pull_shopping ‖ pull_news ‖ pull_amazon) that merge at `agent`.
+# `route_research` returns a LIST of Send() — LangGraph runs them in one super-step.
+
+# Which engine nodes fire for each intent (the router's decision → parallel branches).
+RESEARCH_PLAN = {
+    "full_report": ["pull_trends", "pull_shopping", "pull_news", "pull_amazon"],
+    "demand":      ["pull_trends", "pull_shopping", "pull_news"],
+    "pricing":     ["pull_shopping", "pull_amazon"],
+    "reviews":     ["pull_amazon"],
+}
+
+
 def route_research(state: LaunchLensState):
-    """Conditional edge: return a LIST of Send() to run engines in PARALLEL,
-    or "agent" to skip research and answer from memory."""
+    """Conditional edge (concept 3 → 2): fan OUT to parallel engine nodes via Send,
+    or go straight to `agent` for a followup that needs no new research."""
     route = state["route"]
     query = state.get("product_query", "")
     domain = state.get("domain", config.DEFAULT_DOMAIN)
@@ -164,44 +177,50 @@ def route_research(state: LaunchLensState):
     if route == "followup" or not query:
         return "agent"
 
-    demand, supply = [], []
-    if route in ("full_report", "demand"):
-        demand = ["google_trends", "google_shopping", "google_news"]
-    elif route == "pricing":
-        demand = ["google_shopping"]
-
-    if route in ("full_report", "reviews", "pricing"):
-        supply = ["amazon_search"]
-
-    if not demand and not supply:  # safety net
-        demand, supply = ["google_trends"], ["amazon_search"]
-
-    sends = [Send("serpapi_worker", {"engine": e, "query": query, "domain": domain}) for e in demand]
-    sends += [Send("oxylabs_worker", {"engine": e, "query": query, "domain": domain}) for e in supply]
-    logger.info("fan-out: %d demand + %d supply jobs", len(demand), len(supply))
-    return sends
+    targets = RESEARCH_PLAN.get(route) or ["pull_trends", "pull_amazon"]  # safety default
+    logger.info("fan-out: %s -> %s (parallel)", route, targets)
+    return [Send(node, {"query": query, "domain": domain}) for node in targets]
 
 
-def serpapi_worker(payload: dict) -> dict:
-    """One demand engine (runs in parallel with its siblings)."""
-    engine = payload["engine"]
+def _demand(engine: str, payload: dict) -> dict:
+    """Run one SerpApi demand engine; never raise inside a parallel branch."""
     try:
         signal = tools.DEMAND_ENGINES[engine](payload["query"], payload.get("domain", config.DEFAULT_DOMAIN))
     except Exception as exc:  # noqa: BLE001
-        logger.exception("serpapi_worker %s failed", engine)
+        logger.exception("demand engine %s failed", engine)
         signal = {"engine": engine, "error": str(exc)}
     return {"demand_signals": [signal]}
 
 
-def oxylabs_worker(payload: dict) -> dict:
-    """One supply source (runs in parallel with its siblings)."""
-    source = payload["engine"]
+def _supply(source: str, payload: dict) -> dict:
+    """Run one Oxylabs supply source; never raise inside a parallel branch."""
     try:
         signal = tools.SUPPLY_ENGINES[source](payload["query"], payload.get("domain", config.DEFAULT_DOMAIN))
     except Exception as exc:  # noqa: BLE001
-        logger.exception("oxylabs_worker %s failed", source)
+        logger.exception("supply source %s failed", source)
         signal = {"source": source, "error": str(exc)}
     return {"supply_signals": [signal]}
+
+
+# Parallel branch nodes — one per engine (run concurrently, merge via reducers).
+def pull_trends(payload: dict) -> dict:
+    """Demand branch: Google Trends (interest + related queries)."""
+    return _demand("google_trends", payload)
+
+
+def pull_shopping(payload: dict) -> dict:
+    """Demand branch: Google Shopping (cross-retailer price band)."""
+    return _demand("google_shopping", payload)
+
+
+def pull_news(payload: dict) -> dict:
+    """Demand branch: Google News (launches / recalls / moves)."""
+    return _demand("google_news", payload)
+
+
+def pull_amazon(payload: dict) -> dict:
+    """Supply branch: Amazon search (top sellers, prices, ratings)."""
+    return _supply("amazon_search", payload)
 
 
 # ──────────────────── concept 4: the fusing agent + tools ─────────────────────

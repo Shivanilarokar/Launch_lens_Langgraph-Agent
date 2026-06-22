@@ -53,7 +53,7 @@ def _narrate(node: str, update: dict) -> str | None:
     """Print live research/tool activity; return final verdict text if present."""
     if node == "router":
         console.print(f"  [dim]· intent: {update.get('route')} → {update.get('product_query') or '(followup)'}[/]")
-    elif node == "serpapi_worker":
+    elif "demand_signals" in update:  # a demand branch (pull_trends/shopping/news)
         for s in update.get("demand_signals", []):
             eng = s.get("engine")
             if s.get("error"):
@@ -65,7 +65,7 @@ def _narrate(node: str, update: dict) -> str | None:
                 console.print(f"  [green]· 🛍️  shopping[/] band {b.get('min')}–{b.get('max')} ({s.get('count')} listings)")
             elif eng == "google_news":
                 console.print(f"  [green]· 📰 news[/] {len(s.get('headlines') or [])} headlines")
-    elif node == "oxylabs_worker":
+    elif "supply_signals" in update:  # the supply branch (pull_amazon)
         for s in update.get("supply_signals", []):
             src = s.get("source")
             if s.get("error"):

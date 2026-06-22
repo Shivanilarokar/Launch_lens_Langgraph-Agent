@@ -92,8 +92,8 @@ intentionally not used (not needed for the verdict).
   **summarization node** (`nodes.py` `manage_memory`).
 - **Long-term (bonus, +4): a LangGraph `Store`** (`memory.py:44` `get_store`, Redis-backed)
   holding **facts across ALL threads**. The `agent` node **reads** prior verdicts
-  (`nodes.py:253` `_recall_facts`) and the **`remember`** node **writes** each verdict as a
-  durable fact (`nodes.py:288` `remember`). Verified: a verdict made in one thread is recalled
+  (`nodes.py:272` `_recall_facts`) and the **`remember`** node **writes** each verdict as a
+  durable fact (`nodes.py:307` `remember`). Verified: a verdict made in one thread is recalled
   in a brand-new thread without re-researching.
 
 ---
@@ -102,12 +102,12 @@ intentionally not used (not needed for the verdict).
 
 | # | Concept | Where it lives (file · function · line) |
 |---|---------|------------------------------------------|
-| 1 | **Graph construction & typed state + reducers** | `backend/src/launchlens/state.py:25` `LaunchLensState`; custom reducer `state.py:18` `reset_or_extend`, messages reducer `state.py:27`; wiring & compile `backend/src/launchlens/graph.py:21` `build_graph` |
-| 2 | **Fan-out (parallel) + merge** | `backend/src/launchlens/nodes.py:152` `route_research` (returns a list of `Send`); parallel workers `nodes.py:180` `serpapi_worker` / `nodes.py:191` `oxylabs_worker`; merge via reducer `state.py:36`; edges `graph.py:37` |
-| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:128` `router` (LLM intent classification → `Routing`); conditional edge `nodes.py:152` `route_research` wired at `graph.py:37` |
-| 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:241` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:247` `should_continue` + `graph.py:44`; tools `backend/src/launchlens/tools.py:366` `ALL_TOOLS` (e.g. `tools.py:312` `trend_demand`) — all return **slim JSON** |
-| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:74` `manage_memory` (RemoveMessage prune) |
-| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:253` `_recall_facts`; write `nodes.py:288` `remember` |
+| 1 | **Graph construction & typed state + reducers** | `backend/src/launchlens/state.py:25` `LaunchLensState`; custom reducer `state.py:18` `reset_or_extend`, messages reducer `state.py:27`; wiring & compile `backend/src/launchlens/graph.py:31` `build_graph` |
+| 2 | **Fan-out (parallel) + merge** | `backend/src/launchlens/nodes.py:170` `route_research` (returns a list of `Send`); **four parallel branch nodes** `nodes.py:206` `pull_trends`, `:211` `pull_shopping`, `:216` `pull_news`, `:221` `pull_amazon` (all run in one super-step → merge at `agent`); merge via reducer `state.py:36`; edges in `graph.py:31` `build_graph` |
+| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:133` `router` (LLM intent classification → `Routing`); conditional edge `nodes.py:170` `route_research` (intent → which branches fan out) wired in `graph.py:31` |
+| 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:293` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:299` `should_continue` + `graph.py:31`; tools `backend/src/launchlens/tools.py:366` `ALL_TOOLS` (e.g. `tools.py:312` `trend_demand`) — all return **slim JSON** |
+| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:79` `manage_memory` (RemoveMessage prune) |
+| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:272` `_recall_facts`; write `nodes.py:307` `remember` |
 
 ---
 
