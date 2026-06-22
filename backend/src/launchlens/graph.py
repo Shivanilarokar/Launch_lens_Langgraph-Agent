@@ -18,8 +18,12 @@ from .state import LaunchLensState
 logger = logging.getLogger(__name__)
 
 
-def build_graph(checkpointer):
-    """Build and compile the LaunchLens graph with the given checkpointer."""
+def build_graph(checkpointer, store=None):
+    """Build and compile the LaunchLens graph.
+
+    checkpointer = short-term memory (per-thread). store = long-term, cross-thread
+    memory (bonus) — read by `agent`, written by `remember`.
+    """
     g = StateGraph(LaunchLensState)
 
     g.add_node("manage_memory", nodes.manage_memory)
@@ -30,6 +34,7 @@ def build_graph(checkpointer):
                retry_policy=RetryPolicy(max_attempts=2))
     g.add_node("agent", nodes.agent)
     g.add_node("tools", ToolNode(tools.ALL_TOOLS, handle_tool_errors=True))
+    g.add_node("remember", nodes.remember)
 
     g.add_edge(START, "manage_memory")
     g.add_edge("manage_memory", "router")
@@ -40,11 +45,12 @@ def build_graph(checkpointer):
     )
     g.add_edge("serpapi_worker", "agent")
     g.add_edge("oxylabs_worker", "agent")
-    # concept 4: the agent ⇄ tools ReAct loop.
-    g.add_conditional_edges("agent", nodes.should_continue, ["tools", END])
+    # concept 4: the agent ⇄ tools ReAct loop; on finish, persist to long-term memory.
+    g.add_conditional_edges("agent", nodes.should_continue, ["tools", "remember"])
     g.add_edge("tools", "agent")
+    g.add_edge("remember", END)
 
-    return g.compile(checkpointer=checkpointer)
+    return g.compile(checkpointer=checkpointer, store=store)
 
 
 def draw_mermaid() -> str:

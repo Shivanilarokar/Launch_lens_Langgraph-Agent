@@ -41,8 +41,10 @@ flowchart TD
 
     AG["agent<br/><i>AGENT + TOOLS · FUSE demand × supply</i>"]:::agent
     AG <-->|ReAct tool loop| TL["Tools · slim JSON<br/>SerpApi: trends · shopping · news<br/>Oxylabs: search · product(reviews) · pricing · bestsellers"]:::agent
-    AG --> V["🎯 Go / No-Go / Niche verdict"]:::agent --> E([END])
-    CP[("Checkpointer<br/>Redis · SQLite fallback")]:::mem -.->|state saved after every node| AG
+    AG --> V["🎯 Go / No-Go / Niche verdict"]:::agent --> RM
+    RM["remember<br/><i>LONG-TERM MEMORY · save verdict as a cross-thread fact</i>"]:::mem --> E([END])
+    CP[("Checkpointer · short-term<br/>Redis · SQLite fallback")]:::mem -.->|per-thread state, every node| AG
+    LT[("Store · long-term<br/>facts across ALL threads")]:::mem -.->|recall + save| AG
 
     classDef mem fill:#e8f0fe,stroke:#1a73e8,color:#1a3a6b;
     classDef route fill:#fef7e0,stroke:#f9ab00,color:#5f4500;
@@ -77,12 +79,16 @@ intentionally not used (not needed for the verdict).
   LLM (OpenAI↔Claude) or the checkpointer (Redis↔SQLite↔Postgres) with no code change.
 - **Token discipline:** every tool returns slim JSON, never raw scrapes.
 
-### Memory: short-term (required) — long-term is optional bonus
+### Memory: short-term (required) + long-term (bonus) — both implemented
 
-This build implements **short-term memory** (the required concept 5): a **checkpointer**
-that survives restarts + a **summarization node**. **Long-term / cross-thread memory**
-(a persistent founder profile via the LangGraph `Store`) is an optional **+4 bonus** and
-is **not** included by default.
+- **Short-term (required concept 5):** a **checkpointer** (`memory.py:21` `get_checkpointer`,
+  Redis → SQLite fallback) that survives restarts, keyed by `thread_id`, plus a
+  **summarization node** (`nodes.py` `manage_memory`).
+- **Long-term (bonus, +4): a LangGraph `Store`** (`memory.py:44` `get_store`, Redis-backed)
+  holding **facts across ALL threads**. The `agent` node **reads** prior verdicts
+  (`nodes.py:253` `_recall_facts`) and the **`remember`** node **writes** each verdict as a
+  durable fact (`nodes.py:288` `remember`). Verified: a verdict made in one thread is recalled
+  in a brand-new thread without re-researching.
 
 ---
 
@@ -95,6 +101,7 @@ is **not** included by default.
 | 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:128` `router` (LLM intent classification → `Routing`); conditional edge `nodes.py:152` `route_research` wired at `graph.py:37` |
 | 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:241` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:247` `should_continue` + `graph.py:44`; tools `backend/src/launchlens/tools.py:366` `ALL_TOOLS` (e.g. `tools.py:312` `trend_demand`) — all return **slim JSON** |
 | 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:74` `manage_memory` (RemoveMessage prune) |
+| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:253` `_recall_facts`; write `nodes.py:288` `remember` |
 
 ---
 

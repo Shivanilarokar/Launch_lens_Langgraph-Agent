@@ -62,6 +62,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 
 ## Bonus implemented (+10)
 
+- [x] **Long-term, cross-thread memory** — a LangGraph `Store` (Redis) of verdict facts;
+  `agent` recalls prior research in any thread, `remember` node persists each verdict
+  (`memory.py:44` `get_store`, `nodes.py:253` `_recall_facts`, `nodes.py:288` `remember`)
 - [x] **FastAPI** backend with **SSE streaming** (`backend/src/launchlens/api/app.py`)
 - [x] **React (Vite)** chat UI with streaming tokens, verdict cards, and a demand/supply research rail (`frontend/`)
 - [x] **Redis** checkpointer (production-grade, beyond SQLite/Postgres)

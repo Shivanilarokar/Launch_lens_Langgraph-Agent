@@ -92,7 +92,8 @@ def main():
         return
 
     checkpointer = memory.get_checkpointer()
-    graph = build_graph(checkpointer)
+    store = memory.get_store()
+    graph = build_graph(checkpointer, store)
 
     domain = config.DEFAULT_DOMAIN
     thread_id = "default"

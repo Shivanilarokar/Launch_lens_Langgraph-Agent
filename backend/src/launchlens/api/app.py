@@ -29,7 +29,8 @@ _state: dict = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     checkpointer = memory.get_checkpointer()
-    _state["graph"] = build_graph(checkpointer)
+    store = memory.get_store()
+    _state["graph"] = build_graph(checkpointer, store)
     yield
     memory.close()
 

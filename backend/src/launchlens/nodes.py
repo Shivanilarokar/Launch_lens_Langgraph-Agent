@@ -9,10 +9,12 @@
 """
 import json
 import logging
+import re
 from typing import Literal
 
 from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
 from langgraph.graph import END
+from langgraph.runtime import Runtime
 from langgraph.types import Send
 from pydantic import BaseModel, Field
 
@@ -21,6 +23,9 @@ from .llm import get_llm
 from .state import RESET, LaunchLensState
 
 logger = logging.getLogger(__name__)
+
+# Namespace for long-term, cross-thread memory in the Store.
+LONGTERM_NS = ("launchlens", "facts")
 
 # Lazily-built models so importing this module never needs an API key.
 _bound_llm = None
@@ -210,6 +215,11 @@ You FUSE two worlds into one answer:
 Conversation summary so far:
 {summary}
 
+Long-term memory — products you have ALREADY researched in PAST sessions (across all
+threads). If the founder asks about one of these again, recall the prior verdict instead
+of starting from scratch:
+{longterm}
+
 DEMAND signals gathered this turn:
 {demand}
 
@@ -240,23 +250,62 @@ into the differentiation angle. Do not invent complaints you have not read.
 Be concise and specific; cite real numbers from the signals. Never invent data."""
 
 
-def _system_prompt(state: LaunchLensState) -> str:
+def _recall_facts(runtime: Runtime) -> list[dict]:
+    """Read prior verdicts from the long-term Store (cross-thread memory)."""
+    store = getattr(runtime, "store", None)
+    if store is None:
+        return []
+    try:
+        items = store.search(LONGTERM_NS, limit=5)
+        return [it.value for it in items]
+    except Exception:  # noqa: BLE001 - long-term memory is best-effort
+        return []
+
+
+def _system_prompt(state: LaunchLensState, facts: list[dict]) -> str:
     return AGENT_PROMPT.format(
         summary=state.get("summary", "") or "(none yet)",
+        longterm=json.dumps(facts, ensure_ascii=False)[:2000] if facts else "(no prior research)",
         demand=json.dumps(state.get("demand_signals", []), ensure_ascii=False)[:4000] or "[]",
         supply=json.dumps(state.get("supply_signals", []), ensure_ascii=False)[:4000] or "[]",
     )
 
 
-def agent(state: LaunchLensState) -> dict:
-    sys = SystemMessage(content=_system_prompt(state))
+def agent(state: LaunchLensState, runtime: Runtime) -> dict:
+    sys = SystemMessage(content=_system_prompt(state, _recall_facts(runtime)))
     response = _agent_llm().invoke([sys] + state["messages"])
     return {"messages": [response]}
 
 
 def should_continue(state: LaunchLensState):
-    """Agent ⇄ tools loop: go to tools if the LLM asked for one, else finish."""
+    """Agent ⇄ tools loop: go to tools if the LLM asked for one, else persist + finish."""
     last = state["messages"][-1]
     if getattr(last, "tool_calls", None):
         return "tools"
-    return END
+    return "remember"
+
+
+def remember(state: LaunchLensState, runtime: Runtime) -> dict:
+    """Long-term memory WRITE: persist this verdict as a durable fact, keyed by
+    product + market, so it is recalled in any future thread (concept: bonus
+    long-term, cross-thread memory)."""
+    store = getattr(runtime, "store", None)
+    product = state.get("product_query", "")
+    verdict_text = getattr(state["messages"][-1], "content", "") or ""
+    if store is None or not product or "VERDICT" not in verdict_text.upper():
+        return {}
+
+    match = re.search(r"VERDICT:\s*(GO|NO-GO|NICHE)", verdict_text, re.I)
+    domain = state.get("domain", config.DEFAULT_DOMAIN)
+    key = re.sub(r"[^a-z0-9]+", "-", f"{product}-{domain}".lower()).strip("-")[:64]
+    try:
+        store.put(LONGTERM_NS, key, {
+            "product": product,
+            "market": domain,
+            "verdict": match.group(1).upper() if match else None,
+            "summary": verdict_text[:300],
+        })
+        logger.info("long-term memory: saved fact %r", key)
+    except Exception:  # noqa: BLE001
+        logger.info("long-term memory write skipped")
+    return {}

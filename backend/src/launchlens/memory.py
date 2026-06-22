@@ -41,6 +41,31 @@ def get_checkpointer():
     return saver
 
 
+def get_store():
+    """Return a long-term, cross-thread Store (concept: bonus long-term memory).
+
+    Redis-backed if REDIS_URI is set & reachable (facts persist across restarts AND
+    across every thread); otherwise an in-memory store so the graph still runs.
+    """
+    if config.REDIS_URI:
+        try:
+            from langgraph.store.redis import RedisStore
+
+            cm = RedisStore.from_conn_string(config.REDIS_URI)
+            store = cm.__enter__()
+            store.setup()  # create store indices on first use
+            _open_cms.append(cm)
+            logger.info("store: Redis (long-term, cross-thread)")
+            return store
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Redis store unavailable (%s); using in-memory store", exc)
+
+    from langgraph.store.memory import InMemoryStore
+
+    logger.info("store: in-memory (not persistent across restarts)")
+    return InMemoryStore()
+
+
 def close() -> None:
     """Release Redis connections / SQLite handles on shutdown."""
     for cm in _open_cms:
