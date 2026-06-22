@@ -1,16 +1,16 @@
 flowchart TD
-  U([Founder's question]):::se
-  MM["manage_memory<br/>SHORT-TERM MEMORY<br/>summarize + prune long chats"]:::mem
-  R{"router<br/>ROUTING<br/>classify intent"}:::route
+  U([START &middot; Founder's question]):::se
+  MM["manage_memory<br/>SHORT-TERM MEMORY: summarize + prune"]:::mem
+  R{"router<br/>ROUTING &middot; classify intent<br/>(route_research, conditional)"}:::route
   AG["agent<br/>AGENT + TOOLS &middot; FUSE demand x supply<br/>-&gt; Go / No-Go / Niche verdict"]:::agent
   TL["tools &middot; ToolNode (slim JSON)<br/>SerpApi: trends, shopping, news<br/>Oxylabs: search, product(reviews), pricing, bestsellers"]:::tools
-  RM["remember<br/>LONG-TERM MEMORY<br/>save verdict as a cross-thread fact"]:::mem
+  RM["remember<br/>LONG-TERM MEMORY: save verdict fact"]:::mem
   E([END]):::se
   CP[("Checkpointer &middot; short-term<br/>Redis / SQLite")]:::db
   ST[("Store &middot; long-term<br/>facts across ALL threads")]:::db
-  LEG["EDGE LEGEND<br/>solid grey = static edge<br/>dashed orange = dynamic / conditional (Send, routing)<br/>dotted blue = memory read / write"]:::legend
+  LEG["EDGE LEGEND<br/>solid grey = static edge (add_edge)<br/>dashed orange = conditional edge (add_conditional_edges)<br/>dotted blue = memory I/O at compile (not a graph edge)"]:::legend
 
-  subgraph FO["FAN-OUT &middot; parallel Send() &mdash; true parallel, one super-step"]
+  subgraph FO["FAN-OUT &middot; conditional Send() per intent (RESEARCH_PLAN) &mdash; true parallel"]
     direction LR
     WT["pull_trends<br/>google_trends"]:::fan
     WS["pull_shopping<br/>google_shopping"]:::fan
@@ -20,7 +20,10 @@ flowchart TD
 
   U --> MM
   MM --> R
-  R -.->|research intent| FO
+  R -.->|Send| WT
+  R -.->|Send| WS
+  R -.->|Send| WN
+  R -.->|Send| WA
   R -.->|followup| AG
   WT --> AG
   WS --> AG
@@ -30,13 +33,13 @@ flowchart TD
   TL --> AG
   AG -.->|no tool calls| RM
   RM --> E
-  CP -.->|state saved after every node| AG
-  ST -.->|recall facts| AG
-  RM -.->|save fact| ST
+  CP -.->|state every node| AG
+  ST -.->|recall| AG
+  RM -.->|save| ST
 
-  linkStyle 0,1,4,5,6,7,9,11 stroke:#5f6368,stroke-width:2px
-  linkStyle 2,3,8,10 stroke:#e8710a,stroke-width:2.5px,stroke-dasharray:8 4
-  linkStyle 12,13,14 stroke:#1a73e8,stroke-width:1.6px,stroke-dasharray:2 4
+  linkStyle 0,1,7,8,9,10,12,14 stroke:#5f6368,stroke-width:2px
+  linkStyle 2,3,4,5,6,11,13 stroke:#e8710a,stroke-width:2.5px,stroke-dasharray:8 4
+  linkStyle 15,16,17 stroke:#1a73e8,stroke-width:1.6px,stroke-dasharray:2 4
 
   classDef se fill:#ede7ff,stroke:#7c4dff,color:#3b2a72,stroke-width:2px;
   classDef mem fill:#e8f0fe,stroke:#1a73e8,color:#173a6b,stroke-width:2px;
