@@ -6,11 +6,12 @@ The marketplace is passed explicitly (never global state) so parallel fan-out
 workers on different markets never clobber each other. Live-only: Oxylabs
 credentials are required.
 """
+import json
 import logging
 
 import requests
 
-from .. import config
+from .. import cache, config
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,12 @@ def scrape(source: str, query: str, domain: str | None = None, **context) -> dic
         )
 
     domain = domain or config.DEFAULT_DOMAIN
+    key = f"oxylabs:{source}:{domain}:{query}:" + json.dumps(context, sort_keys=True)
+    hit = cache.get(key)
+    if hit is not None:
+        logger.info("oxylabs cache hit: %s %s", source, query)
+        return hit
+
     payload = {"source": source, "domain": domain, "query": query, "parse": True}
     if context:
         payload["context"] = [{"key": k, "value": v} for k, v in context.items()]
@@ -40,4 +47,7 @@ def scrape(source: str, query: str, domain: str | None = None, **context) -> dic
         timeout=90,
     )
     response.raise_for_status()
-    return response.json()["results"][0]["content"]
+    content = response.json()["results"][0]["content"]
+
+    cache.set(key, content)
+    return content

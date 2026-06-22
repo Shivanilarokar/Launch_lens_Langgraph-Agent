@@ -26,3 +26,10 @@ def test_asin_from():
 def test_market_fallback():
     assert config.market("com")["geo"] == "US"
     assert config.market("nonsense")["geo"] == config.market()["geo"]  # falls back to default
+
+
+def test_cache_roundtrip():
+    from launchlens import cache
+    cache.set("test:viva:key", {"hello": "world"})
+    assert cache.get("test:viva:key") == {"hello": "world"}
+    assert cache.get("test:viva:missing") is None

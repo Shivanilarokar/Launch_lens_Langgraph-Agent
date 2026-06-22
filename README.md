@@ -78,6 +78,9 @@ intentionally not used (not needed for the verdict).
 - **Config via env:** keys, model, market, and Redis URI are all env-driven; swap the
   LLM (OpenAI↔Claude) or the checkpointer (Redis↔SQLite↔Postgres) with no code change.
 - **Token discipline:** every tool returns slim JSON, never raw scrapes.
+- **Resilience & cost:** every external node (workers, agent, tools) retries transient
+  failures with **exponential backoff** (`graph.py` `RETRY`); provider responses are
+  **cached** on disk with a TTL (`cache.py`) to spare the SerpApi free tier / Oxylabs credits.
 
 ### Memory: short-term (required) + long-term (bonus) — both implemented
 

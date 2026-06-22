@@ -17,6 +17,16 @@ from .state import LaunchLensState
 
 logger = logging.getLogger(__name__)
 
+# Exponential backoff for every node that touches an external service
+# (SerpApi / Oxylabs / the LLM): retry transient failures 1s → 2s → 4s instead
+# of killing the run. Non-transient errors are still surfaced.
+RETRY = RetryPolicy(
+    max_attempts=3,
+    initial_interval=1.0,
+    backoff_factor=2.0,
+    max_interval=10.0,
+)
+
 
 def build_graph(checkpointer, store=None):
     """Build and compile the LaunchLens graph.
@@ -28,12 +38,12 @@ def build_graph(checkpointer, store=None):
 
     g.add_node("manage_memory", nodes.manage_memory)
     g.add_node("router", nodes.router)
-    g.add_node("serpapi_worker", nodes.serpapi_worker,
-               retry_policy=RetryPolicy(max_attempts=2))
-    g.add_node("oxylabs_worker", nodes.oxylabs_worker,
-               retry_policy=RetryPolicy(max_attempts=2))
-    g.add_node("agent", nodes.agent)
-    g.add_node("tools", ToolNode(tools.ALL_TOOLS, handle_tool_errors=True))
+    # External-service nodes get exponential-backoff retries on transient failures.
+    g.add_node("serpapi_worker", nodes.serpapi_worker, retry_policy=RETRY)
+    g.add_node("oxylabs_worker", nodes.oxylabs_worker, retry_policy=RETRY)
+    g.add_node("agent", nodes.agent, retry_policy=RETRY)
+    g.add_node("tools", ToolNode(tools.ALL_TOOLS, handle_tool_errors=True),
+               retry_policy=RETRY)
     g.add_node("remember", nodes.remember)
 
     g.add_edge(START, "manage_memory")

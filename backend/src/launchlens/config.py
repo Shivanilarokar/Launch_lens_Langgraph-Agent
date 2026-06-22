@@ -57,6 +57,14 @@ SQLITE_PATH = os.getenv("SQLITE_PATH", str(REPO_ROOT / "launchlens_checkpoints.s
 MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", "12"))
 KEEP_LAST = int(os.getenv("KEEP_LAST", "6"))
 
+# ─── Response cache ───────────────────────────────────────────────────────────
+# Cache provider responses on disk so repeat queries don't re-spend the SerpApi
+# free tier (~250/mo) or Oxylabs credits. Toggle with CACHE_ENABLED=false.
+CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() != "false"
+CACHE_TTL = int(os.getenv("CACHE_TTL", "21600"))  # seconds (default 6h)
+CACHE_DIR = REPO_ROOT / ".cache"
+CACHE_DIR.mkdir(exist_ok=True)
+
 
 # ─── Startup validation ───────────────────────────────────────────────────────
 def missing_keys() -> list[str]:
