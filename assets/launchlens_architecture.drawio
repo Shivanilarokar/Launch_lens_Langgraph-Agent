@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="LaunchLens Architecture">
+    <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1150" pageHeight="980" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="LaunchLens — actual LangGraph architecture (matches backend/src/launchlens)" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#202124;" vertex="1" parent="1">
+          <mxGeometry x="150" y="16" width="850" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="u" value="START&#10;Founder asks a question" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f1f3f4;strokeColor=#9aa0a6;fontColor=#202124;" vertex="1" parent="1">
+          <mxGeometry x="450" y="60" width="220" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mm" value="manage_memory  (nodes.py:79)&#10;SHORT-TERM MEMORY: summarize old turns + prune,&#10;reset per-turn research scratchpad" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbe9ff;strokeColor=#1a73e8;fontColor=#173a6b;" vertex="1" parent="1">
+          <mxGeometry x="400" y="130" width="320" height="64" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rt" value="router  (nodes.py:133)&#10;ROUTING: classify intent (structured output)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#f9ab00;fontColor=#5f4500;" vertex="1" parent="1">
+          <mxGeometry x="445" y="230" width="230" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fanbg" value="FAN-OUT — parallel Send() (route_research, nodes.py:170)&#10;engines chosen per intent (RESEARCH_PLAN); run in ONE super-step" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#d9f2e3;strokeColor=#34a853;fontColor=#0b5132;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="380" width="450" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="pt" value="pull_trends  (nodes.py:206)&#10;SerpApi: google_trends" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf0;strokeColor=#34a853;fontColor=#0b5132;" vertex="1" parent="1">
+          <mxGeometry x="665" y="430" width="185" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="ps" value="pull_shopping  (nodes.py:211)&#10;SerpApi: google_shopping" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf0;strokeColor=#34a853;fontColor=#0b5132;" vertex="1" parent="1">
+          <mxGeometry x="875" y="430" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="pn" value="pull_news  (nodes.py:216)&#10;SerpApi: google_news" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf0;strokeColor=#34a853;fontColor=#0b5132;" vertex="1" parent="1">
+          <mxGeometry x="665" y="500" width="185" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="pa" value="pull_amazon  (nodes.py:221)&#10;Oxylabs: amazon_search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf0;strokeColor=#34a853;fontColor=#0b5132;" vertex="1" parent="1">
+          <mxGeometry x="875" y="500" width="190" height="46" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ag" value="agent  (nodes.py:293)&#10;AGENT + TOOLS (ReAct) — FUSE demand x supply&#10;-> Go / No-Go / Niche verdict" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbdcd9;strokeColor=#ea4335;fontColor=#5f1b14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="640" width="300" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="tl" value="tools — ToolNode (tools.py:366)&#10;SerpApi: trend_demand, shopping_prices, market_news&#10;Oxylabs: amazon_search, amazon_product(reviews), pricing, bestsellers&#10;(slim JSON, handle_tool_errors)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdeeee;strokeColor=#ea4335;fontColor=#5f1b14;" vertex="1" parent="1">
+          <mxGeometry x="770" y="630" width="320" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rm" value="remember  (nodes.py:307)&#10;LONG-TERM MEMORY: save verdict as a&#10;cross-thread fact" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbe9ff;strokeColor=#1a73e8;fontColor=#173a6b;" vertex="1" parent="1">
+          <mxGeometry x="430" y="760" width="280" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="end" value="END" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f1f3f4;strokeColor=#9aa0a6;fontColor=#202124;" vertex="1" parent="1">
+          <mxGeometry x="510" y="864" width="120" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cp" value="Checkpointer — SHORT-TERM&#10;Redis (SQLite fallback)&#10;memory.py:21" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dbe9ff;strokeColor=#1a73e8;fontColor=#173a6b;" vertex="1" parent="1">
+          <mxGeometry x="110" y="636" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="st" value="Store — LONG-TERM&#10;Redis · facts across ALL threads&#10;memory.py:44" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dbe9ff;strokeColor=#1a73e8;fontColor=#173a6b;" vertex="1" parent="1">
+          <mxGeometry x="110" y="760" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend" value="RESEARCH_PLAN (router intent -> parallel branches):&#10;full_report = Trends + Shopping + News + Amazon&#10;demand = Trends + Shopping + News   ·   pricing = Shopping + Amazon&#10;reviews = Amazon   ·   followup -> agent (answer from memory, no research)" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f8f9fa;strokeColor=#dadce0;fontColor=#3c4043;rounded=1;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="640" y="760" width="450" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="u" target="mm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="mm" target="rt"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="research intents&#10;-> Send (parallel)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontColor=#0b5132;" edge="1" parent="1" source="rt" target="fanbg"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="followup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontColor=#5f4500;" edge="1" parent="1" source="rt" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="merge (reducer)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pt" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="ps" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pn" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pa" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" value="ReAct: calls tools" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;startArrow=block;endArrow=block;fontColor=#5f1b14;" edge="1" parent="1" source="ag" target="tl"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" value="no tool calls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="ag" target="rm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="rm" target="end"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12" value="state saved after every node" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;endArrow=open;fontColor=#173a6b;" edge="1" parent="1" source="cp" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e13" value="recall facts" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;endArrow=open;fontColor=#173a6b;" edge="1" parent="1" source="st" target="ag"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e14" value="save fact" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;endArrow=open;fontColor=#173a6b;" edge="1" parent="1" source="rm" target="st"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

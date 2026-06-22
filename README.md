@@ -20,9 +20,10 @@ Built on **LangGraph** · Python 3.12 · provider-agnostic LLM (OpenAI or Claude
 
 ![LaunchLens graph (styled)](assets/graph_styled.png)
 
-> Two diagrams of the same graph: **`assets/graph_compiled.png`** is generated straight
+> Diagrams of the **same** graph: **`assets/graph_compiled.png`** is generated straight
 > from the live graph (`graph.get_graph().draw_mermaid_png()`); **`assets/graph_styled.png`**
-> (above) is the hand-styled, colour-by-concept version. Mermaid sources: `assets/*.mmd`.
+> (above) is the hand-styled, colour-by-concept version; **`assets/launchlens_architecture.drawio`**
+> is an editable draw.io version (open at draw.io → Export → PNG/PDF). Mermaid sources: `assets/*.mmd`.
 > The colourised mermaid is also inlined below so it renders on GitHub.
 
 ```mermaid
