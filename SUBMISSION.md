@@ -16,16 +16,16 @@ across turns and automatic summarization.
 
 ## The 5 required LangGraph concepts (file · function · line)
 
-1. **Graph + typed state/reducers** — `backend/src/launchlens/state.py:25` `LaunchLensState`,
-   reducer `state.py:18`; wiring `backend/src/launchlens/graph.py:31` `build_graph`.
-2. **Fan-out (parallel) + merge** — `backend/src/launchlens/nodes.py:170` `route_research`
-   (list of `Send`) → four parallel branch nodes `nodes.py:206/211/216/221`
-   (`pull_trends/pull_shopping/pull_news/pull_amazon`), merge reducer `state.py:36`.
-3. **Routing (conditional edges)** — `nodes.py:133` `router`; edge `nodes.py:170` wired at `graph.py:31`.
-4. **Agent node + tools** — `nodes.py:293` `agent`; ReAct loop `nodes.py:299` + `graph.py:31`;
+1. **Graph + typed state/reducers** — `backend/src/launchlens/state.py:24` `LaunchLensState`,
+   reducer `state.py:17`; wiring `backend/src/launchlens/graph.py:33` `build_graph`.
+2. **Fan-out (parallel) + merge** — `backend/src/launchlens/nodes.py:169` `route_research`
+   (list of `Send`) → four parallel branch nodes `nodes.py:205/210/215/220`
+   (`pull_trends/pull_shopping/pull_news/pull_amazon`), merge reducer `state.py:35`.
+3. **Routing (conditional edges)** — `nodes.py:132` `router`; edge `nodes.py:169` wired at `graph.py:33`.
+4. **Agent node + tools** — `nodes.py:292` `agent`; ReAct loop `nodes.py:298` + `graph.py:33`;
    tools `backend/src/launchlens/tools.py:366` `ALL_TOOLS` (slim JSON).
 5. **Short-term memory** — checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer`
-   (Redis, SQLite fallback); summarization `nodes.py:79` `manage_memory`.
+   (Redis, SQLite fallback); summarization `nodes.py:78` `manage_memory`.
 
 (Full table with context in `README.md`.)
 
@@ -34,7 +34,7 @@ across turns and automatic summarization.
 - **SerpApi (demand):** `google_trends`, `google_shopping`, `google_news` — **3 engines**.
 - **Oxylabs (supply):** `amazon_search`, `amazon_product` (review-gap mining),
   `amazon_bestsellers`, `amazon_pricing` — **4 sources**.
-- The two are **fused in the agent's reasoning** (`nodes.py:203` `AGENT_PROMPT`) into one verdict.
+- The two are **fused in the agent's reasoning** (`nodes.py:226` `AGENT_PROMPT`) into one verdict.
 - **Live vs mock:** runs **fully live** (both providers + LLM). No mock/fixtures — real keys
   required (see `.env.example`). The demo video shows real calls to both providers.
 
@@ -65,7 +65,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 
 - [x] **Long-term, cross-thread memory** — a LangGraph `Store` (Redis) of verdict facts;
   `agent` recalls prior research in any thread, `remember` node persists each verdict
-  (`memory.py:44` `get_store`, `nodes.py:272` `_recall_facts`, `nodes.py:307` `remember`)
+  (`memory.py:44` `get_store`, `nodes.py:271` `_recall_facts`, `nodes.py:306` `remember`)
 - [x] **FastAPI** backend with **SSE streaming** (`backend/src/launchlens/api/app.py`)
 - [x] **React (Vite)** chat UI with streaming tokens, verdict cards, and a demand/supply research rail (`frontend/`)
 - [x] **Redis** checkpointer (production-grade, beyond SQLite/Postgres)

@@ -6,7 +6,6 @@
   - the memory node can RESET them to [] at the start of each turn.
 Everything else overwrites (no reducer).
 """
-import operator
 from typing import Annotated
 
 from langgraph.graph.message import add_messages
