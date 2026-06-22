@@ -228,9 +228,15 @@ product, give a clear verdict in this shape:
 The DEMAND and SUPPLY signals above were ALREADY gathered for you this turn — treat
 them as your research. Do NOT call trend_demand, shopping_prices, market_news, or
 amazon_search again for the same query; answer directly from the signals above.
-Only call a tool to get genuinely NEW information not shown above — e.g. amazon_product
-for a specific ASIN's reviews/complaints, amazon_pricing for competing offers,
-amazon_bestsellers, or any engine for a DIFFERENT market the user newly asks about.
+Only call a tool to get genuinely NEW information not shown above — e.g. amazon_pricing
+for competing offers, amazon_bestsellers, or any engine for a DIFFERENT market the user
+newly asks about.
+
+GROUND DIFFERENTIATION IN REAL REVIEWS: for a launch verdict, take the top-selling ASIN
+from the amazon_search results above and call `amazon_product` on it ONCE to read its
+recent review complaints, then turn those concrete complaints (e.g. "leaks", "flimsy lid")
+into the differentiation angle. Do not invent complaints you have not read.
+
 Be concise and specific; cite real numbers from the signals. Never invent data."""
 
 

@@ -18,23 +18,71 @@ Built on **LangGraph** · Python 3.12 · provider-agnostic LLM (OpenAI or Claude
 
 ## Architecture
 
+> The canonical diagram is generated **from the live graph** via
+> `graph.get_graph().draw_mermaid()` (see `docs/graph.mmd`). Below is the same graph,
+> colourised by concept.
+
 ```mermaid
-graph TD;
-  __start__([start]) --> manage_memory
-  manage_memory(manage_memory · summarize + reset) --> router
-  router(router · classify intent) -. followup .-> agent
-  router -. Send fan-out .-> serpapi_worker
-  router -. Send fan-out .-> oxylabs_worker
-  serpapi_worker(serpapi_worker · Trends/Shopping/News) --> agent
-  oxylabs_worker(oxylabs_worker · Amazon) --> agent
-  agent(agent · FUSE demand+supply → verdict) -. tool_call .-> tools
-  tools(tools · ReAct) --> agent
-  agent -. done .-> __end__([end])
+flowchart TD
+    U([Founder's question]) --> MM
+    MM["manage_memory<br/><i>SHORT-TERM MEMORY · summarize + prune long chats</i>"]:::mem --> R
+    R{"router<br/><i>ROUTING · classify intent</i>"}:::route
+    R -->|followup| AG
+    R -->|"demand / pricing / reviews / full report"| FO
+
+    subgraph FO["FAN-OUT · parallel Send() across engines"]
+      direction LR
+      WT["📈 Google Trends"]:::fan
+      WS["🛍️ Google Shopping"]:::fan
+      WN["📰 Google News"]:::fan
+      WA["📦 Amazon search"]:::fan
+    end
+    FO --> AG
+
+    AG["agent<br/><i>AGENT + TOOLS · FUSE demand × supply</i>"]:::agent
+    AG <-->|ReAct tool loop| TL["Tools · slim JSON<br/>SerpApi: trends · shopping · news<br/>Oxylabs: search · product(reviews) · pricing · bestsellers"]:::agent
+    AG --> V["🎯 Go / No-Go / Niche verdict"]:::agent --> E([END])
+    CP[("Checkpointer<br/>Redis · SQLite fallback")]:::mem -.->|state saved after every node| AG
+
+    classDef mem fill:#e8f0fe,stroke:#1a73e8,color:#1a3a6b;
+    classDef route fill:#fef7e0,stroke:#f9ab00,color:#5f4500;
+    classDef fan fill:#e6f4ea,stroke:#34a853,color:#0b5132;
+    classDef agent fill:#fce8e6,stroke:#ea4335,color:#5f1b14;
 ```
 
 Every turn: **manage memory** (summarize if long) → **route** by intent → **fan out**
-research across individual engines in parallel → **agent fuses** both sides into the verdict.
-Follow-ups skip research and answer from memory, calling tools on demand.
+research across individual engines in parallel → **agent fuses** both sides, mining real
+Amazon reviews for the differentiation angle, into the verdict. Follow-ups skip research
+and answer from memory, calling tools on demand.
+
+### Data sources used (live)
+
+| Side | Provider | Used | Produces |
+|------|----------|------|----------|
+| Demand | SerpApi | `google_trends`, `google_shopping`, `google_news` (3 of 4) | trend direction + related queries, cross-retailer price band, recalls/launches |
+| Supply | Oxylabs | `amazon_search`, `amazon_product` (reviews), `amazon_pricing`, `amazon_bestsellers` (4 of 5) | top sellers, prices, ratings, **review-gap mining**, competing offers |
+
+Requirement is ≥2 each; we ship 3 + 4. `google_search` and Oxylabs `universal` are
+intentionally not used (not needed for the verdict).
+
+### How this scales
+
+- **Stateless app, state in the DB:** all conversation state lives in the checkpointer
+  (Redis Cloud), keyed by `thread_id` — the process holds no memory, so you can run
+  many backend replicas behind a load balancer.
+- **No global mutable state:** the marketplace/domain is passed explicitly through each
+  tool call (not a global), so concurrent users on different markets never collide.
+- **Bounded context:** the summarization node caps token growth on long threads.
+- **Config via env:** keys, model, market, and Redis URI are all env-driven; swap the
+  LLM (OpenAI↔Claude) or the checkpointer (Redis↔SQLite↔Postgres) with no code change.
+- **Token discipline:** every tool returns slim JSON, never raw scrapes.
+
+### Memory: short-term (required) — long-term is optional bonus
+
+This build implements **short-term memory** (the required concept 5): a **checkpointer**
+that survives restarts + a **summarization node**. **Long-term / cross-thread memory**
+(a persistent founder profile via the LangGraph `Store`) is an optional **+4 bonus** and
+is **not** included by default.
 
 ---
 
