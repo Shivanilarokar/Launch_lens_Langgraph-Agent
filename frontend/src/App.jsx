@@ -1,210 +1,143 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, streamChat } from './api'
-import Sidebar from './components/Sidebar.jsx'
-import Turn from './components/Turn.jsx'
-import ContextPanel from './components/ContextPanel.jsx'
-import Ticker from './components/Ticker.jsx'
-import MarketBoard from './components/MarketBoard.jsx'
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { getMarkets, streamChat } from "./api";
 
-const HINTS = [
-  'Should I launch a stainless-steel insulated water bottle in India under ₹1,500?',
-  'What about the US market?',
-  'Pull the reviews of the top seller and name the main complaint',
-  'Where would a ₹1,299 price sit vs competitors?',
-]
+const newThread = () => "web-" + Math.random().toString(36).slice(2, 9);
+
+function verdictBadge(text) {
+  const m = text.match(/VERDICT:\s*(GO|NO-GO|NICHE)/i);
+  if (!m) return null;
+  const v = m[1].toUpperCase();
+  const cls = v === "NO-GO" ? "verdict-NOGO" : v === "GO" ? "verdict-GO" : "verdict-NICHE";
+  return <span className={`verdict-badge ${cls}`}>{v}</span>;
+}
+
+function DemandSignal({ s }) {
+  if (s.error) return <div className="signal demand"><div className="label">{s.engine}</div><div className="kv">⚠ {s.error}</div></div>;
+  if (s.engine === "google_trends")
+    return (
+      <div className="signal demand">
+        <div className="label">📈 Google Trends</div>
+        <div className="kv">interest {s.trend_direction} ({s.change_pct}%)</div>
+        <div>{(s.related_rising || []).map((q) => <span className="chip" key={q}>↑ {q}</span>)}</div>
+      </div>
+    );
+  if (s.engine === "google_shopping") {
+    const b = s.price_band || {};
+    return <div className="signal demand"><div className="label">🛍️ Google Shopping</div><div className="kv">band {b.min}–{b.max} · {s.count} listings</div></div>;
+  }
+  if (s.engine === "google_news")
+    return <div className="signal demand"><div className="label">📰 Google News</div><div className="kv">{(s.headlines || []).length} headlines</div>{(s.headlines || []).slice(0, 2).map((h, i) => <div className="kv" key={i}>• {h.title}</div>)}</div>;
+  return <div className="signal demand"><div className="label">{s.engine}</div></div>;
+}
+
+function SupplySignal({ s }) {
+  if (s.error) return <div className="signal supply"><div className="label">{s.source}</div><div className="kv">⚠ {s.error}</div></div>;
+  if (s.source === "amazon_search")
+    return (
+      <div className="signal supply">
+        <div className="label">📦 Amazon top sellers</div>
+        {(s.products || []).slice(0, 4).map((p) => <div className="kv" key={p.asin}>• {p.title?.slice(0, 42)} — {p.currency || ""}{p.price} ★{p.rating}</div>)}
+      </div>
+    );
+  return <div className="signal supply"><div className="label">📦 {s.source}</div></div>;
+}
 
 export default function App() {
-  const [threads, setThreads] = useState([])
-  const [activeThread, setActiveThread] = useState('demo')
-  const [turns, setTurns] = useState([])
-  const [memState, setMemState] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [input, setInput] = useState('')
-  const [live, setLive] = useState(true)
-  const [lastMs, setLastMs] = useState(null)
-  const [markets, setMarkets] = useState([])
-  const [domain, setDomain] = useState('in')
-  const feedRef = useRef(null)
+  const [markets, setMarkets] = useState([]);
+  const [domain, setDomain] = useState("in");
+  const [threadId, setThreadId] = useState(newThread);
+  const [turns, setTurns] = useState([]);
+  const [demand, setDemand] = useState([]);
+  const [supply, setSupply] = useState([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState([]);
+  const streamRef = useRef(null);
 
-  const refreshThreads = useCallback(async () => {
-    try {
-      const data = await api.threads()
-      setThreads(data.threads.length ? data.threads : ['demo'])
-    } catch {
-      setThreads(['demo'])
-    }
-  }, [])
+  useEffect(() => { getMarkets().then((d) => { setMarkets(d.marketplaces || []); setDomain(d.default || "in"); }).catch(() => {}); }, []);
+  useEffect(() => { streamRef.current?.scrollTo(0, streamRef.current.scrollHeight); }, [turns, activity]);
 
-  const loadThread = useCallback(async (threadId) => {
-    setActiveThread(threadId)
-    try {
-      const [hist, st] = await Promise.all([api.history(threadId), api.state(threadId)])
-      setTurns(hist.messages.map((m) => ({ role: m.role === 'user' ? 'user' : 'agent', content: m.content })))
-      setMemState(st)
-    } catch {
-      setTurns([])
-      setMemState(null)
-    }
-  }, [])
-
-  useEffect(() => {
-    api.health().then((h) => setLive(!h.mock_mode)).catch(() => {})
-    api.marketplaces().then((m) => {
-      setMarkets(m.marketplaces)
-      setDomain(m.default)
-    }).catch(() => {})
-    refreshThreads()
-    loadThread('demo')
-  }, [refreshThreads, loadThread])
-
-  useEffect(() => {
-    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
-  }, [turns, busy])
-
-  const send = async (text) => {
-    const message = (text || input).trim()
-    if (!message || busy) return
-    setInput('')
-    setBusy(true)
-    setTurns((t) => [
-      ...t,
-      { role: 'user', content: message },
-      { role: 'agent', content: '', toolCalls: [], products: [], demand: [], supply: [], streaming: true },
-    ])
-    const t0 = performance.now()
-    const patch = (fn) =>
-      setTurns((t) => {
-        const c = [...t]
-        const last = { ...c[c.length - 1] }
-        fn(last)
-        c[c.length - 1] = last
-        return c
-      })
+  async function send() {
+    const msg = input.trim();
+    if (!msg || busy) return;
+    setInput("");
+    setBusy(true);
+    setDemand([]); setSupply([]); setActivity([]);
+    setTurns((t) => [...t, { role: "user", content: msg }, { role: "assistant", content: "" }]);
 
     try {
-      await streamChat({ threadId: activeThread, message, domain }, (ev, data) => {
-        if (ev === 'research') {
-          if (data.node === 'router') patch((l) => { l.route = data.route })
-          else if (data.side === 'demand') patch((l) => { l.demand = [...l.demand, data.signal] })
-          else if (data.side === 'supply') patch((l) => {
-            l.supply = [...l.supply, data.signal]
-            if (data.signal?.products) l.products = [...l.products, ...data.signal.products]
-          })
-        } else if (ev === 'tool') {
-          patch((l) => { l.toolCalls = [...l.toolCalls, ...data.calls.map((n) => ({ name: n }))] })
-        } else if (ev === 'token') {
-          patch((l) => { l.content += data.text })
-        } else if (ev === 'final') {
-          patch((l) => { l.streaming = false })
-        } else if (ev === 'error') {
-          patch((l) => { l.content = `error: ${data.message}`; l.error = true; l.streaming = false })
+      await streamChat({ threadId, message: msg, domain }, (event, data) => {
+        if (event === "research") {
+          if (data.node === "router") setActivity((a) => [...a, `intent: ${data.route} → ${data.query || "(followup)"}`]);
+          else if (data.side === "demand") setDemand((d) => [...d, data.signal]);
+          else if (data.side === "supply") setSupply((s) => [...s, data.signal]);
+        } else if (event === "tool") {
+          setActivity((a) => [...a, `calling tool: ${data.calls.join(", ")}`]);
+        } else if (event === "token") {
+          setTurns((t) => { const c = [...t]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + data.text }; return c; });
+        } else if (event === "error") {
+          setTurns((t) => { const c = [...t]; c[c.length - 1] = { role: "assistant", content: "⚠ " + data.message }; return c; });
         }
-      })
-    } catch (err) {
-      patch((l) => { l.content = `error: ${err.message} (is the backend running on :8010?)`; l.error = true; l.streaming = false })
+      });
+    } catch (e) {
+      setTurns((t) => { const c = [...t]; c[c.length - 1] = { role: "assistant", content: "⚠ " + e.message + " — is the backend running on :8010?" }; return c; });
     } finally {
-      setBusy(false)
-      setLastMs(Math.round(performance.now() - t0))
-      try { setMemState(await api.state(activeThread)) } catch { /* ignore */ }
-      refreshThreads()
-    }
-  }
-
-  // every product seen in this thread feeds the ticker + market board
-  const tickerItems = []
-  const seen = new Set()
-  for (const t of turns) {
-    for (const p of t.products || []) {
-      if (p.asin && p.price != null && !seen.has(p.asin)) {
-        seen.add(p.asin)
-        tickerItems.push(p)
-      }
+      setBusy(false);
+      setActivity([]);
     }
   }
 
   return (
-    <div className="layout">
-      <Sidebar
-        threads={threads}
-        activeThread={activeThread}
-        onSelect={loadThread}
-        onCreate={(id) => {
-          setThreads((t) => (t.includes(id) ? t : [...t, id]))
-          loadThread(id)
-        }}
-        live={live}
-      />
+    <div className="app">
+      <div className="topbar">
+        <div className="brand">LaunchLens <small>🔭 demand × supply → verdict</small></div>
+        <div className="spacer" />
+        <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+          {markets.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
+        </select>
+        <button onClick={() => { setThreadId(newThread()); setTurns([]); setDemand([]); setSupply([]); }}>New chat</button>
+      </div>
 
-      <main className="chat-col">
-        <div className="topbar">
-          <div className="thread-id-block">
-            <span className="thread-label">Thread</span>
-            <span className="thread-name">{activeThread}</span>
+      <div className="main">
+        <div className="chat">
+          <div className="stream" ref={streamRef}>
+            {turns.length === 0 && <div className="empty">Ask: “Should I launch a stainless-steel insulated water bottle in India under ₹1,500?”</div>}
+            {turns.map((t, i) =>
+              t.role === "user" ? (
+                <div className="bubble user" key={i}>{t.content}</div>
+              ) : (
+                <div className="bubble assistant" key={i}>
+                  {verdictBadge(t.content)}
+                  {t.content ? <ReactMarkdown>{t.content}</ReactMarkdown> : <span className="empty">…</span>}
+                </div>
+              )
+            )}
+            {busy && activity.length > 0 && (
+              <div className="activity">
+                {activity.map((a, i) => <div className="row" key={i}><span className="dot" />{a}</div>)}
+              </div>
+            )}
           </div>
-          <label className="market-select">
-            <span className="market-label">Market</span>
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
-              {markets.map((m) => (
-                <option key={m.code} value={m.code}>amazon.{m.code} ({m.currency})</option>
-              ))}
-            </select>
-          </label>
-          <Ticker items={tickerItems} />
-        </div>
-
-        <div className="feed" ref={feedRef}>
-          {turns.length === 0 && !busy ? (
-            <div className="empty-state">
-              <div className="masthead">
-                <h2>Should you <em>launch it?</em></h2>
-                <p className="mast-sub">
-                  Describe a product idea. LaunchLens fuses live demand (Google) with supply
-                  (Amazon) into a Go / No-Go / Niche verdict — and remembers the conversation.
-                </p>
-              </div>
-              <div className="hints">
-                {HINTS.map((h) => (
-                  <button key={h} className="hint" onClick={() => send(h)}>{h}</button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            turns.map((turn, i) => <Turn key={i} turn={turn} />)
-          )}
-        </div>
-
-        <div className="composer">
-          <form onSubmit={(e) => { e.preventDefault(); send() }}>
-            <textarea
+          <div className="composer">
+            <input
               value={input}
+              placeholder="Describe a product idea and market…"
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-              }}
-              placeholder="Describe a product idea and market…  (Enter to send, Shift+Enter = new line)"
-              rows={2}
+              onKeyDown={(e) => e.key === "Enter" && send()}
               disabled={busy}
-              autoFocus
             />
-            <button type="submit" disabled={busy || !input.trim()}>Ask</button>
-          </form>
+            <button onClick={send} disabled={busy || !input.trim()}>{busy ? "…" : "Ask"}</button>
+          </div>
         </div>
 
-        <div className="statusbar">
-          <span className={`sb-mode ${live ? 'live' : 'mock'}`}>{live ? 'Live' : 'Mock'}</span>
-          <span className="sb-item">Thread {activeThread}</span>
-          <span className="sb-item">Messages {memState?.message_count ?? 0} of 12</span>
-          <span className="sb-item">Checkpoints {memState?.checkpoints ?? 0}</span>
-          <span className="sb-spacer" />
-          {lastMs != null && <span className="sb-item">Last turn {(lastMs / 1000).toFixed(1)}s</span>}
-          <span className="sb-item">{busy ? 'Researching…' : 'Idle'}</span>
+        <div className="rail">
+          <h3>Demand · SerpApi</h3>
+          {demand.length ? demand.map((s, i) => <DemandSignal s={s} key={i} />) : <div className="empty">no demand signals yet</div>}
+          <h3>Supply · Oxylabs</h3>
+          {supply.length ? supply.map((s, i) => <SupplySignal s={s} key={i} />) : <div className="empty">no supply signals yet</div>}
         </div>
-      </main>
-
-      <aside className="boardcol">
-        <MarketBoard products={tickerItems} />
-        <ContextPanel state={memState} />
-      </aside>
+      </div>
     </div>
-  )
+  );
 }

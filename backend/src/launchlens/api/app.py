@@ -114,34 +114,16 @@ def threads():
     return {"threads": memory.list_threads(_state["graph"].checkpointer)}
 
 
-@app.get("/threads/{thread_id}/history")
-def thread_history(thread_id: str):
-    """Past user/assistant messages for a thread (to reload a conversation)."""
-    vals = _state["graph"].get_state({"configurable": {"thread_id": thread_id}}).values or {}
-    out = []
-    for m in vals.get("messages", []):
-        if m.type in ("human", "ai") and getattr(m, "content", None):
-            out.append({"role": "user" if m.type == "human" else "assistant", "content": m.content})
-    return {"thread_id": thread_id, "messages": out}
-
-
 @app.get("/threads/{thread_id}/state")
 def thread_state(thread_id: str):
-    cfg = {"configurable": {"thread_id": thread_id}}
-    vals = _state["graph"].get_state(cfg).values or {}
-    try:
-        checkpoints = sum(1 for _ in _state["graph"].get_state_history(cfg))
-    except Exception:  # noqa: BLE001
-        checkpoints = 0
+    vals = _state["graph"].get_state({"configurable": {"thread_id": thread_id}}).values or {}
     return {
         "thread_id": thread_id,
         "summary": vals.get("summary", ""),
         "message_count": len(vals.get("messages", [])),
-        "checkpoints": checkpoints,
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": config.LLM_MODEL,
-            "default_market": config.DEFAULT_DOMAIN, "mock_mode": False}
+    return {"status": "ok", "model": config.LLM_MODEL, "default_market": config.DEFAULT_DOMAIN}
