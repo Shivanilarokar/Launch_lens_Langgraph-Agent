@@ -91,6 +91,8 @@ def _slim_search_item(item: dict) -> dict:
         "rating": item.get("rating"),
         "reviews_count": item.get("reviews_count"),
         "best_seller": item.get("best_seller"),
+        "sales_volume": item.get("sales_volume"),
+        "image": item.get("url_image"),
     }
 
 
