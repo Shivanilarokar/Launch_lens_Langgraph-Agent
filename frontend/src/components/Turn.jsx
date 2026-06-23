@@ -4,12 +4,27 @@ import ProductCard from './ProductCard.jsx'
 import Analytics, { computePicks } from './Analytics.jsx'
 import DemandPulse from './DemandPulse.jsx'
 
-function VerdictBadge({ text }) {
-  const m = text.match(/VERDICT:\s*(GO|NO-GO|NICHE)/i)
+// Robust: matches "VERDICT: GO", "**Verdict:** NO-GO", "Niche", "NOGO", etc.
+function parseVerdict(text = '') {
+  const m = text.match(/VERDICT[:\s]*\*{0,2}\s*(GO|NO-?GO|NICHE)\b/i)
   if (!m) return null
-  const v = m[1].toUpperCase()
-  const cls = v === 'NO-GO' ? 'nogo' : v === 'GO' ? 'go' : 'niche'
-  return <span className={`verdict-badge ${cls}`}>{v}</span>
+  return m[1].toUpperCase().replace('NOGO', 'NO-GO')
+}
+
+function VerdictCard({ verdict }) {
+  const cls = verdict === 'NO-GO' ? 'nogo' : verdict === 'GO' ? 'go' : 'niche'
+  const icon = verdict === 'GO' ? '✅' : verdict === 'NO-GO' ? '⛔' : '🎯'
+  const label =
+    verdict === 'GO' ? 'Worth launching'
+      : verdict === 'NO-GO' ? 'Not worth it'
+        : 'Niche opportunity'
+  return (
+    <div className={`verdict-card ${cls}`}>
+      <span className="vc-icon">{icon}</span>
+      <span className="vc-word">{verdict}</span>
+      <span className="vc-label">{label}</span>
+    </div>
+  )
 }
 
 export default function Turn({ turn }) {
@@ -21,6 +36,7 @@ export default function Turn({ turn }) {
     )
   }
 
+  const verdict = parseVerdict(turn.content)
   const picks = turn.products?.length ? computePicks(turn.products) : []
   const pickFor = (asin) => picks.find((x) => x.p.asin === asin)?.tag
 
@@ -41,8 +57,9 @@ export default function Turn({ turn }) {
 
       {turn.demand?.length > 0 && <DemandPulse signals={turn.demand} />}
 
+      {verdict && <VerdictCard verdict={verdict} />}
+
       <div className={`bubble ${turn.error ? 'error' : ''}`}>
-        {turn.content ? <VerdictBadge text={turn.content} /> : null}
         {turn.content
           ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
           : <span className="thinking"><span className="pulse" /> Researching live market data…</span>}

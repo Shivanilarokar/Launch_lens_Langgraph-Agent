@@ -104,10 +104,17 @@ body {
 .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
 
-.verdict-badge { display: inline-block; font-weight: 800; letter-spacing: .6px; font-size: 13px; padding: 3px 12px; border-radius: 999px; margin-bottom: 10px; }
-.verdict-badge.go { background: rgba(61,220,132,.14); color: var(--go); border: 1px solid var(--go); }
-.verdict-badge.nogo { background: rgba(255,107,107,.14); color: var(--nogo); border: 1px solid var(--nogo); }
-.verdict-badge.niche { background: rgba(255,200,87,.14); color: var(--niche); border: 1px solid var(--niche); }
+/* prominent verdict banner */
+.verdict-card { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; border: 1px solid; margin: 2px 0 4px; }
+.verdict-card.go { background: linear-gradient(90deg, rgba(61,220,132,.20), rgba(61,220,132,.04)); border-color: var(--go); }
+.verdict-card.nogo { background: linear-gradient(90deg, rgba(255,107,107,.20), rgba(255,107,107,.04)); border-color: var(--nogo); }
+.verdict-card.niche { background: linear-gradient(90deg, rgba(255,200,87,.20), rgba(255,200,87,.04)); border-color: var(--niche); }
+.vc-icon { font-size: 24px; }
+.vc-word { font-size: 26px; font-weight: 900; letter-spacing: .5px; }
+.verdict-card.go .vc-word { color: var(--go); }
+.verdict-card.nogo .vc-word { color: var(--nogo); }
+.verdict-card.niche .vc-word { color: var(--niche); }
+.vc-label { color: var(--muted); font-size: 14px; }
 
 .trace { background: #0c1322; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
 .trace-line .fn { color: var(--cyan); } .trace-line .args { color: var(--dim); }
