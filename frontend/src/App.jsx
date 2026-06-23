@@ -5,7 +5,7 @@ import ResearchRail from './components/ResearchRail.jsx'
 import Verdict from './components/Verdict.jsx'
 import ProductCard from './components/ProductCard.jsx'
 
-const LS_KEY = 'launchlens.convos.v1'
+const LS_KEY = 'launchlens.convos.v2'
 const DEFAULT_TITLE = 'New chat'
 const uid = () => 'c-' + Math.random().toString(36).slice(2, 10)
 const loadConvos = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || [] } catch { return [] } }
