@@ -117,9 +117,16 @@ def threads():
 
 @app.get("/threads/{thread_id}/history")
 def thread_history(thread_id: str):
-    """Past user/assistant messages for a thread (to reopen an older chat)."""
+    """Full turn-by-turn history for a thread (to reopen an older chat).
+
+    Reads the never-pruned `transcript` so the whole conversation is shown even
+    after summarization has trimmed the LLM working set (`messages`).
+    """
     vals = _state["graph"].get_state({"configurable": {"thread_id": thread_id}}).values or {}
-    out = []
+    transcript = vals.get("transcript")
+    if transcript:
+        return {"thread_id": thread_id, "messages": transcript}
+    out = []  # fallback for threads created before the transcript existed
     for m in vals.get("messages", []):
         if m.type in ("human", "ai") and getattr(m, "content", None):
             out.append({"role": "user" if m.type == "human" else "assistant", "content": m.content})

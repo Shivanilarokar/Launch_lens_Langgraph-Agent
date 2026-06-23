@@ -6,6 +6,7 @@
   - the memory node can RESET them to [] at the start of each turn.
 Everything else overwrites (no reducer).
 """
+import operator
 from typing import Annotated
 
 from langgraph.graph.message import add_messages
@@ -34,3 +35,6 @@ class LaunchLensState(TypedDict):
     # Research scratchpad merged from the parallel fan-out (concept 2)
     demand_signals: Annotated[list, reset_or_extend]
     supply_signals: Annotated[list, reset_or_extend]
+    # Full display transcript — every user/assistant turn, NEVER pruned (so the chat
+    # app shows the whole conversation even after summarization trims `messages`).
+    transcript: Annotated[list, operator.add]

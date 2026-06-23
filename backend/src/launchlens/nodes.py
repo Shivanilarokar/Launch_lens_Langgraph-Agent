@@ -81,6 +81,11 @@ def manage_memory(state: LaunchLensState) -> dict:
     messages = state["messages"]
     updates: dict = {"demand_signals": RESET, "supply_signals": RESET}
 
+    # Record this turn's user message in the never-pruned display transcript.
+    last_user = _last_human(messages)
+    if last_user:
+        updates["transcript"] = [{"role": "user", "content": last_user}]
+
     if len(messages) > config.MAX_MESSAGES:
         # Cut on a clean turn boundary (a human message) so we never orphan a
         # tool-call / tool-result pair, which the LLM API would later reject.
@@ -312,23 +317,28 @@ def remember(state: LaunchLensState, runtime: Runtime) -> dict:
     (route == "full_report") AND produced a GO/NO-GO/NICHE verdict. Demand-only,
     pricing-only, review-only, and follow-up/chit-chat turns are NOT persisted.
     """
+    final = getattr(state["messages"][-1], "content", "") or ""
+    updates: dict = {}
+
+    # 1) SHORT-TERM display: record the assistant's answer in the never-pruned transcript.
+    if final:
+        updates["transcript"] = [{"role": "assistant", "content": final}]
+
+    # 2) LONG-TERM (selective): only persist a real launch verdict, minimal fields.
     store = getattr(runtime, "store", None)
     product = state.get("product_query", "")
-    verdict_text = getattr(state["messages"][-1], "content", "") or ""
-    match = re.search(r"VERDICT:\s*(GO|NO-GO|NICHE)", verdict_text, re.I)
+    match = re.search(r"VERDICT:\s*(GO|NO-GO|NICHE)", final, re.I)
+    if store is not None and state.get("route") == "full_report" and product and match:
+        domain = state.get("domain", config.DEFAULT_DOMAIN)
+        key = re.sub(r"[^a-z0-9]+", "-", f"{product}-{domain}".lower()).strip("-")[:64]
+        try:
+            store.put(LONGTERM_NS, key, {
+                "product": product,
+                "market": domain,
+                "verdict": match.group(1).upper(),
+            })
+            logger.info("long-term memory: saved %s -> %s", key, match.group(1).upper())
+        except Exception:  # noqa: BLE001
+            logger.info("long-term memory write skipped")
 
-    if store is None or state.get("route") != "full_report" or not product or not match:
-        return {}
-
-    domain = state.get("domain", config.DEFAULT_DOMAIN)
-    key = re.sub(r"[^a-z0-9]+", "-", f"{product}-{domain}".lower()).strip("-")[:64]
-    try:
-        store.put(LONGTERM_NS, key, {
-            "product": product,
-            "market": domain,
-            "verdict": match.group(1).upper(),
-        })
-        logger.info("long-term memory: saved %s -> %s", key, match.group(1).upper())
-    except Exception:  # noqa: BLE001
-        logger.info("long-term memory write skipped")
-    return {}
+    return updates
