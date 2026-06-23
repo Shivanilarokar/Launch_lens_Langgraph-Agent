@@ -91,11 +91,11 @@ intentionally not used (not needed for the verdict).
 - **Short-term (required concept 5):** a **checkpointer** (`memory.py:21` `get_checkpointer`,
   Redis → SQLite fallback) that survives restarts, keyed by `thread_id`, plus a
   **summarization node** (`nodes.py` `manage_memory`).
-- **Long-term (bonus, +4): a LangGraph `Store`** (`memory.py:44` `get_store`, Redis-backed)
-  holding **facts across ALL threads**. The `agent` node **reads** prior verdicts
-  (`nodes.py:271` `_recall_facts`) and the **`remember`** node **writes** each verdict as a
-  durable fact (`nodes.py:306` `remember`). Verified: a verdict made in one thread is recalled
-  in a brand-new thread without re-researching.
+- **Long-term (bonus): a LangGraph `Store`** (`memory.py:44` `get_store`, Redis-backed)
+  holding **facts across ALL threads** — launch verdicts and the founder's name/location.
+  The `agent` reads prior verdicts (`nodes.py:316` `_recall_facts`) and the profile
+  (`nodes.py:328` `_recall_profile`); the **`remember`** node (`nodes.py:365`) writes them.
+  Verified: a verdict/profile from one thread is recalled in a brand-new thread.
 
 ---
 
@@ -103,12 +103,12 @@ intentionally not used (not needed for the verdict).
 
 | # | Concept | Where it lives (file · function · line) |
 |---|---------|------------------------------------------|
-| 1 | **Graph construction & typed state + reducers** | `backend/src/launchlens/state.py:24` `LaunchLensState`; custom reducer `state.py:17` `reset_or_extend`, messages reducer `state.py:26`; wiring & compile `backend/src/launchlens/graph.py:33` `build_graph` |
-| 2 | **Fan-out (parallel) + merge** | `backend/src/launchlens/nodes.py:169` `route_research` (returns a list of `Send`); **four parallel branch nodes** `nodes.py:205` `pull_trends`, `:210` `pull_shopping`, `:215` `pull_news`, `:220` `pull_amazon` (all run in one super-step → merge at `agent`); merge via reducer `state.py:35`; edges in `graph.py:33` `build_graph` |
-| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:132` `router` (LLM intent classification → `Routing`); conditional edge `nodes.py:169` `route_research` (intent → which branches fan out) wired in `graph.py:33` |
-| 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:292` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:298` `should_continue` + `graph.py:33`; tools `backend/src/launchlens/tools.py:366` `ALL_TOOLS` (e.g. `tools.py:312` `trend_demand`) — all return **slim JSON** |
-| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:78` `manage_memory` (RemoveMessage prune) |
-| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:271` `_recall_facts`; write `nodes.py:306` `remember` |
+| 1 | **Graph construction & typed state + reducers** | `backend/src/launchlens/state.py:25` `LaunchLensState`; custom reducer `state.py:18` `reset_or_extend`, messages reducer `state.py:27`, transcript reducer `state.py:43`; wiring & compile `backend/src/launchlens/graph.py:33` `build_graph` |
+| 2 | **Fan-out (parallel) + merge** | `backend/src/launchlens/nodes.py:196` `route_research` (returns a list of `Send`); **four parallel branch nodes** `nodes.py:233` `pull_trends`, `nodes.py:238` `pull_shopping`, `nodes.py:243` `pull_news`, `nodes.py:248` `pull_amazon` (all run in one super-step → merge at `agent`); merge via reducer `state.py:39`; edges in `graph.py:33` `build_graph` (lines 61-65) |
+| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:156` `router` (LLM intent classification → `Routing` at `nodes.py:106`); conditional edge `nodes.py:196` `route_research` (intent → branches, with `chitchat`/`followup` default to the agent) wired in `graph.py:61` |
+| 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:351` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:357` `should_continue` + `graph.py:67`; tools `backend/src/launchlens/tools.py:368` `ALL_TOOLS` (e.g. `tools.py:314` `trend_demand`), wrapped by `safe` at `tools.py:27` — all return **slim JSON** |
+| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:79` `manage_memory` (RemoveMessage prune, cuts on a human boundary) |
+| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:316` `_recall_facts` + `nodes.py:328` `_recall_profile`; write `nodes.py:365` `remember` |
 
 ---
 
@@ -121,7 +121,7 @@ mining), `amazon_bestsellers`, `amazon_pricing`.
 
 Tools live in `backend/src/launchlens/tools.py` and return **slimmed JSON**, never raw
 scrapes (token discipline). The `agent` node is explicitly prompted to fuse both sides
-into one verdict — `nodes.py:226` `AGENT_PROMPT`.
+into one verdict (`nodes.py:254` `AGENT_PROMPT`).
 
 ---
 
