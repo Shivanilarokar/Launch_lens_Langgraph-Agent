@@ -16,6 +16,7 @@ export const api = {
   history: (threadId) => get(`/threads/${encodeURIComponent(threadId)}/history`),
   state: (threadId) => get(`/threads/${encodeURIComponent(threadId)}/state`),
   memory: () => get('/memory'),
+  profile: () => get('/profile'),
 }
 
 // Stream one chat turn (SSE). on(event, data): research | tool | token | final | error

@@ -155,6 +155,16 @@ def long_term_memory():
     return {"facts": facts}
 
 
+@app.get("/profile")
+def long_term_profile():
+    """The founder's remembered name / location (long-term, cross-thread)."""
+    try:
+        item = _state["store"].get(("launchlens", "profile"), "user")
+        return {"profile": item.value if item else {}}
+    except Exception:  # noqa: BLE001
+        return {"profile": {}}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "model": config.LLM_MODEL, "default_market": config.DEFAULT_DOMAIN}

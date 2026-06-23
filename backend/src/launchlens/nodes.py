@@ -23,8 +23,9 @@ from .state import RESET, LaunchLensState
 
 logger = logging.getLogger(__name__)
 
-# Namespace for long-term, cross-thread memory in the Store.
-LONGTERM_NS = ("launchlens", "facts")
+# Namespaces for long-term, cross-thread memory in the Store.
+LONGTERM_NS = ("launchlens", "facts")        # launch verdicts
+PROFILE_NS = ("launchlens", "profile")       # the founder's name / location
 
 # Lazily-built models so importing this module never needs an API key.
 _bound_llm = None
@@ -104,18 +105,28 @@ def manage_memory(state: LaunchLensState) -> dict:
 # ───────────────────────────── concept 3: routing ────────────────────────────
 class Routing(BaseModel):
     """Structured router decision."""
-    intent: Literal["full_report", "demand", "pricing", "reviews", "followup"] = Field(
+    intent: Literal["full_report", "demand", "pricing", "reviews", "followup", "chitchat"] = Field(
         description="full_report=research a new idea end-to-end; demand=trends/interest "
         "only; pricing=price positioning; reviews=marketplace/review gaps; "
-        "followup=answer from the existing conversation, no new research."
+        "followup=answer from the existing conversation, no new research; "
+        "chitchat=greeting, small talk, a question about the assistant, a general "
+        "question, or the user sharing personal info — answer directly, no research."
     )
     product_query: str = Field(
         default="", description="the product/idea to research, cleaned to keywords; "
-        "empty for a followup that needs no new data"
+        "empty for a followup or chitchat that needs no new data"
     )
     domain: str = Field(
         default="in", description="Amazon market code: in, com, co.uk, de, ca, "
         "com.au, ae, co.jp"
+    )
+    user_name: str = Field(
+        default="", description="the user's name ONLY if they state it in this message "
+        "(e.g. 'I'm Riya', 'my name is Sam'); otherwise empty"
+    )
+    user_location: str = Field(
+        default="", description="the user's city/country ONLY if they state it "
+        "(e.g. 'I'm based in Mumbai'); otherwise empty"
     )
 
 
@@ -134,7 +145,11 @@ Rules:
 - Only asking about reviews/complaints/quality → reviews.
 - "what about the US market", "compare it", "why", or anything answerable from the
   conversation so far → followup (keep product_query empty).
-Always extract a clean product_query for any non-followup intent.
+- A greeting, small talk, a question about you/your capabilities, a general
+  knowledge question, or the user sharing personal details → chitchat (no research).
+Always extract a clean product_query for full_report/demand/pricing/reviews intents.
+If the user shares their name or location anywhere in the message, set user_name /
+user_location (otherwise leave them empty).
 Pick the market code from the message if the user names a country; else keep {domain}."""
 
 
@@ -144,13 +159,15 @@ def router(state: LaunchLensState) -> dict:
     sys = SystemMessage(
         content=ROUTER_PROMPT.format(domain=current_domain, summary=state.get("summary", "") or "(none)")
     )
+    user_name, user_location = "", ""
     try:
         decision = _llm().with_structured_output(Routing).invoke(
             [sys, HumanMessage(content=last)]
         )
         intent = decision.intent
-        product_query = decision.product_query or state.get("product_query", "")
+        product_query = "" if intent == "chitchat" else (decision.product_query or state.get("product_query", ""))
         domain = decision.domain if decision.domain in config.MARKETPLACES else current_domain
+        user_name, user_location = decision.user_name.strip(), decision.user_location.strip()
     except Exception as exc:  # noqa: BLE001 - never let routing crash a turn
         logger.warning("router fell back to heuristic: %s", exc)
         intent = "followup" if state.get("product_query") else "full_report"
@@ -158,7 +175,8 @@ def router(state: LaunchLensState) -> dict:
         domain = current_domain
 
     logger.info("router: intent=%s domain=%s query=%r", intent, domain, product_query)
-    return {"route": intent, "product_query": product_query, "domain": domain}
+    return {"route": intent, "product_query": product_query, "domain": domain,
+            "user_name": user_name, "user_location": user_location}
 
 
 # ─────────────────────── concept 2: fan-out via Send ──────────────────────────
@@ -182,7 +200,8 @@ def route_research(state: LaunchLensState):
     query = state.get("product_query", "")
     domain = state.get("domain", config.DEFAULT_DOMAIN)
 
-    if route == "followup" or not query:
+    # chitchat / greetings / general / personal-info / followups → straight to the LLM
+    if route in ("followup", "chitchat") or not query:
         return "agent"
 
     targets = RESEARCH_PLAN.get(route) or ["pull_trends", "pull_amazon"]  # safety default
@@ -239,6 +258,10 @@ You FUSE two worlds into one answer:
   • SUPPLY (Amazon via Oxylabs): what is actually selling — top products, prices,
     ratings, and review complaints (= product gaps/opportunities).
 
+Founder profile (remembered across all sessions): {profile}
+If you know their name, address them by it naturally. If you know their location and
+they don't name a market, prefer it.
+
 Conversation summary so far:
 {summary}
 
@@ -254,6 +277,11 @@ SUPPLY signals gathered this turn:
 {supply}
 
 Using BOTH sides together, answer the founder.
+
+If the message is a greeting, small talk, a question about you, a general question,
+or the user just sharing personal info (their name or location), reply briefly and
+warmly as LaunchLens — you help founders decide what to launch by fusing Google demand
+with Amazon supply. Acknowledge any name/location they shared. No VERDICT, no research.
 
 If the founder asks an INFORMATIONAL or comparison question (e.g. "what is X",
 "what are the top/different brands", "list competitors", "what's selling") rather
@@ -297,8 +325,22 @@ def _recall_facts(runtime: Runtime) -> list[dict]:
         return []
 
 
-def _system_prompt(state: LaunchLensState, facts: list[dict]) -> str:
+def _recall_profile(runtime: Runtime) -> dict:
+    """Read the founder's name/location from the long-term Store (cross-thread)."""
+    store = getattr(runtime, "store", None)
+    if store is None:
+        return {}
+    try:
+        item = store.get(PROFILE_NS, "user")
+        return item.value if item else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _system_prompt(state: LaunchLensState, facts: list[dict], profile: dict) -> str:
+    prof = ", ".join(f"{k}: {v}" for k, v in profile.items() if v) or "(unknown)"
     return AGENT_PROMPT.format(
+        profile=prof,
         summary=state.get("summary", "") or "(none yet)",
         longterm=json.dumps(facts, ensure_ascii=False)[:2000] if facts else "(no prior research)",
         demand=json.dumps(state.get("demand_signals", []), ensure_ascii=False)[:4000] or "[]",
@@ -307,7 +349,7 @@ def _system_prompt(state: LaunchLensState, facts: list[dict]) -> str:
 
 
 def agent(state: LaunchLensState, runtime: Runtime) -> dict:
-    sys = SystemMessage(content=_system_prompt(state, _recall_facts(runtime)))
+    sys = SystemMessage(content=_system_prompt(state, _recall_facts(runtime), _recall_profile(runtime)))
     response = _agent_llm().invoke([sys] + state["messages"])
     return {"messages": [response]}
 
@@ -352,5 +394,20 @@ def remember(state: LaunchLensState, runtime: Runtime) -> dict:
             logger.info("long-term memory: saved %s -> %s", key, match.group(1).upper())
         except Exception:  # noqa: BLE001
             logger.info("long-term memory write skipped")
+
+    # 3) LONG-TERM profile: persist the founder's name / location whenever shared.
+    name, loc = state.get("user_name", ""), state.get("user_location", "")
+    if store is not None and (name or loc):
+        try:
+            existing = store.get(PROFILE_NS, "user")
+            prof = dict(existing.value) if existing else {}
+            if name:
+                prof["name"] = name
+            if loc:
+                prof["location"] = loc
+            store.put(PROFILE_NS, "user", prof)
+            logger.info("long-term profile updated: %s", prof)
+        except Exception:  # noqa: BLE001
+            logger.info("profile write skipped")
 
     return updates

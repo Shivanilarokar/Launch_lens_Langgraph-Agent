@@ -29,9 +29,13 @@ export default function App() {
   const [markets, setMarkets] = useState([])
   const [domain, setDomain] = useState('in')
   const [memoryFacts, setMemoryFacts] = useState([])
+  const [profile, setProfile] = useState({})
   const streamRef = useRef(null)
 
-  const refreshMemory = () => api.memory().then((d) => setMemoryFacts(d.facts || [])).catch(() => {})
+  const refreshMemory = () => {
+    api.memory().then((d) => setMemoryFacts(d.facts || [])).catch(() => {})
+    api.profile().then((d) => setProfile(d.profile || {})).catch(() => {})
+  }
 
   useEffect(() => {
     api.marketplaces().then((m) => { setMarkets(m.marketplaces || []); setDomain(m.default || 'in') }).catch(() => {})
@@ -107,6 +111,7 @@ export default function App() {
         onSelect={selectConvo}
         onNew={newChat}
         memoryFacts={memoryFacts}
+        profile={profile}
         onPickMemory={(f) => setInput(`What did we conclude about ${f.product}?`)}
       />
 

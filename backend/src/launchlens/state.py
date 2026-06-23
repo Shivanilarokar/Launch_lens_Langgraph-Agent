@@ -32,6 +32,9 @@ class LaunchLensState(TypedDict):
     # Extracted product idea and target market
     product_query: str
     domain: str
+    # Founder details extracted this turn (persisted to long-term profile memory)
+    user_name: str
+    user_location: str
     # Research scratchpad merged from the parallel fan-out (concept 2)
     demand_signals: Annotated[list, reset_or_extend]
     supply_signals: Annotated[list, reset_or_extend]

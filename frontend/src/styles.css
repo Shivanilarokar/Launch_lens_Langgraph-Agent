@@ -73,6 +73,8 @@ button { font-family: inherit; }
 .memory-pane { border-top: 1px solid var(--border); padding-top: 12px; max-height: 40%; overflow-y: auto; }
 .mem-count { background: var(--grad); color: oklch(0.99 0.01 285); border-radius: 999px; padding: 1px 9px; font-size: var(--t-xs); font-weight: 700; }
 .mem-hint { font-size: var(--t-xs); color: var(--faint); margin: 0 8px 8px; }
+.founder { display: flex; align-items: center; gap: 7px; font-size: var(--t-sm); font-weight: 600; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid var(--accent-bd); border-radius: 9px; padding: 7px 10px; margin: 0 4px 10px; }
+.founder-ic { font-size: 12px; }
 .memfact { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 8px; cursor: pointer; transition: background .15s var(--ease); }
 .memfact:hover { background: var(--surface); }
 .mem-verdict { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.02em; }

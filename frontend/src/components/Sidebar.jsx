@@ -1,4 +1,5 @@
-export default function Sidebar({ conversations, activeId, onSelect, onNew, memoryFacts, onPickMemory }) {
+export default function Sidebar({ conversations, activeId, onSelect, onNew, memoryFacts, profile, onPickMemory }) {
+  const founder = [profile?.name, profile?.location].filter(Boolean).join(' · ')
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -32,6 +33,9 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, memo
           <span className="mem-count">{memoryFacts.length}</span>
         </div>
         <div className="mem-hint">Remembered across every chat</div>
+        {founder && (
+          <div className="founder"><span className="founder-ic">👤</span> {founder}</div>
+        )}
         {memoryFacts.length === 0 && <div className="side-empty">Nothing remembered yet</div>}
         {memoryFacts.map((f, i) => (
           <button key={i} className="memfact" onClick={() => onPickMemory(f)} title={f.summary || f.product}>
