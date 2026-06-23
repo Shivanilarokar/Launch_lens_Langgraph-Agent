@@ -12,9 +12,9 @@ const loadConvos = () => { try { return JSON.parse(localStorage.getItem(LS_KEY))
 const saveConvos = (c) => localStorage.setItem(LS_KEY, JSON.stringify(c))
 
 const HINTS = [
-  'Should I launch a stainless-steel insulated water bottle in India under ₹1,500?',
-  'Is a bamboo toothbrush worth launching in the US under $5?',
-  'Compare a cork yoga mat against the competition in India',
+  'Is it worth launching a portable blender in the US under $40?',
+  'What are buyers complaining about in budget air fryers in India?',
+  'Validate demand for matcha starter kits in the UK and suggest a price',
 ]
 
 export default function App() {
