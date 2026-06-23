@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, streamChat } from './api'
 import Sidebar from './components/Sidebar.jsx'
 import ResearchRail from './components/ResearchRail.jsx'
-import Verdict, { isVerdict } from './components/Verdict.jsx'
+import Verdict from './components/Verdict.jsx'
 import ProductCard from './components/ProductCard.jsx'
 
 const LS_KEY = 'launchlens.convos.v1'
@@ -140,9 +140,7 @@ export default function App() {
               <div className="msg assistant" key={i}>
                 <div className="who"><span className="who-ic">🔭</span> LaunchLens</div>
                 {t.content
-                  ? (isVerdict(t.content)
-                      ? <Verdict content={t.content} />
-                      : <div className="md"><Verdict content={t.content} /></div>)
+                  ? <Verdict content={t.content} />
                   : <div className="typing"><span /><span /><span /></div>}
                 {t.products?.length > 0 && (
                   <div className="pcards">

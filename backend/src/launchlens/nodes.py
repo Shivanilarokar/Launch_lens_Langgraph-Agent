@@ -126,11 +126,15 @@ Current market in effect: {domain}. Known summary so far: {summary}
 
 Rules:
 - A brand-new product idea, or "should I launch X", "is X worth it" → full_report.
+- Asking what's selling, top/different brands, competitors, "what is X", or to
+  compare products in a category → full_report (we need to scan demand + supply).
+  Set product_query to the product/category keywords (e.g. "school bag").
 - Only asking about interest/trend/popularity → demand.
 - Only asking about price/positioning → pricing.
 - Only asking about reviews/complaints/quality → reviews.
 - "what about the US market", "compare it", "why", or anything answerable from the
   conversation so far → followup (keep product_query empty).
+Always extract a clean product_query for any non-followup intent.
 Pick the market code from the message if the user names a country; else keep {domain}."""
 
 
@@ -249,8 +253,16 @@ DEMAND signals gathered this turn:
 SUPPLY signals gathered this turn:
 {supply}
 
-Using BOTH sides together, answer the founder. When they ask whether to launch a
-product, give a clear verdict in this shape:
+Using BOTH sides together, answer the founder.
+
+If the founder asks an INFORMATIONAL or comparison question (e.g. "what is X",
+"what are the top/different brands", "list competitors", "what's selling") rather
+than a launch decision, just answer it directly and helpfully — name the brands /
+products with their prices and ratings from the SUPPLY signals, add the demand
+context if useful, and DO NOT output a VERDICT line or the verdict template.
+
+ONLY when they ask whether to launch / price / position a product, give a clear
+verdict in this shape:
 
   VERDICT: GO / NO-GO / NICHE
   • Demand: <rising/flat/declining + the hot related searches>
