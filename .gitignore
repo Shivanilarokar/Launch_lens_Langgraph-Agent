@@ -31,3 +31,5 @@ node_modules/
 docs
 reference
 .claude1
+# Vite cache
+**/.vite/
