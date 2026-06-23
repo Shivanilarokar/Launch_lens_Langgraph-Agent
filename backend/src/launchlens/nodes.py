@@ -304,26 +304,31 @@ def should_continue(state: LaunchLensState):
 
 
 def remember(state: LaunchLensState, runtime: Runtime) -> dict:
-    """Long-term memory WRITE: persist this verdict as a durable fact, keyed by
-    product + market, so it is recalled in any future thread (concept: bonus
-    long-term, cross-thread memory)."""
+    """Long-term memory WRITE (selective): persist ONLY a real launch verdict as a
+    minimal, durable fact — {product, market, verdict} — keyed by product+market,
+    so it is recalled in any future thread (concept: bonus long-term memory).
+
+    We deliberately store little: only when the turn was a full launch report
+    (route == "full_report") AND produced a GO/NO-GO/NICHE verdict. Demand-only,
+    pricing-only, review-only, and follow-up/chit-chat turns are NOT persisted.
+    """
     store = getattr(runtime, "store", None)
     product = state.get("product_query", "")
     verdict_text = getattr(state["messages"][-1], "content", "") or ""
-    if store is None or not product or "VERDICT" not in verdict_text.upper():
+    match = re.search(r"VERDICT:\s*(GO|NO-GO|NICHE)", verdict_text, re.I)
+
+    if store is None or state.get("route") != "full_report" or not product or not match:
         return {}
 
-    match = re.search(r"VERDICT:\s*(GO|NO-GO|NICHE)", verdict_text, re.I)
     domain = state.get("domain", config.DEFAULT_DOMAIN)
     key = re.sub(r"[^a-z0-9]+", "-", f"{product}-{domain}".lower()).strip("-")[:64]
     try:
         store.put(LONGTERM_NS, key, {
             "product": product,
             "market": domain,
-            "verdict": match.group(1).upper() if match else None,
-            "summary": verdict_text[:300],
+            "verdict": match.group(1).upper(),
         })
-        logger.info("long-term memory: saved fact %r", key)
+        logger.info("long-term memory: saved %s -> %s", key, match.group(1).upper())
     except Exception:  # noqa: BLE001
         logger.info("long-term memory write skipped")
     return {}
