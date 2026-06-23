@@ -22,9 +22,9 @@ function SupplySignal({ s }) {
   if (s.source === 'amazon_search')
     return (
       <div className="signal">
-        <div className="sig-l supply">📦 Amazon — {(s.products || []).length} sellers</div>
+        <div className="sig-l supply">📦 Amazon · {(s.products || []).length} sellers</div>
         {(s.products || []).slice(0, 4).map((p) => (
-          <div className="sig-kv" key={p.asin}>• {p.title?.slice(0, 40)} — {p.currency || ''}{p.price} ★{p.rating}</div>
+          <div className="sig-kv" key={p.asin}>• {p.title?.slice(0, 40)} · {p.currency || ''}{p.price} ★{p.rating}</div>
         ))}
       </div>
     )

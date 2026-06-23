@@ -91,7 +91,7 @@ export default function App() {
         else if (ev === 'error') patch((l) => { l.content = '⚠ ' + data.message; l.error = true })
       })
     } catch (e) {
-      patch((l) => { l.content = '⚠ ' + e.message + ' — is the backend on :8010?'; l.error = true })
+      patch((l) => { l.content = '⚠ ' + e.message + ' (is the backend on :8010?)'; l.error = true })
     } finally {
       setBusy(false); setActivity([]); refreshMemory()
     }
@@ -126,7 +126,7 @@ export default function App() {
             <div className="welcome">
               <div className="w-logo">🔭</div>
               <h1>Should you launch it?</h1>
-              <p>Describe a product idea. LaunchLens fuses live demand (Google) with supply (Amazon) into a detailed Go / No-Go / Niche verdict — and remembers it across every chat.</p>
+              <p>Describe a product idea. LaunchLens fuses live demand (Google) with supply (Amazon) into a detailed Go / No-Go / Niche verdict, and remembers it across every chat.</p>
               <div className="w-hints">
                 {HINTS.map((h) => <button key={h} onClick={() => send(h)}>{h}</button>)}
               </div>
