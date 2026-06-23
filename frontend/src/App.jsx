@@ -117,7 +117,10 @@ export default function App() {
 
       <main className="chat">
         <header className="chat-head">
-          <div className="ch-title">{activeTitle === DEFAULT_TITLE ? 'New chat' : activeTitle}</div>
+          <div className="ch-id">
+            <span className="ch-tagline">A Market Intelligence System</span>
+            {activeTitle !== DEFAULT_TITLE && <span className="ch-sub">{activeTitle}</span>}
+          </div>
           <label className="market">
             Market
             <select value={domain} onChange={(e) => setDomain(e.target.value)}>

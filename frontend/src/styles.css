@@ -85,7 +85,15 @@ button { font-family: inherit; }
 /* ─── Chat ─── */
 .chat { display: flex; flex-direction: column; min-height: 0; }
 .chat-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; border-bottom: 1px solid var(--border); background: oklch(0.99 0.004 285 / 0.8); backdrop-filter: blur(14px); }
-.ch-title { font-weight: 700; font-size: var(--t-base); }
+.ch-id { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.ch-tagline {
+  font-weight: 800; font-size: 1.02rem; letter-spacing: 0.01em; white-space: nowrap;
+  background: linear-gradient(96deg, oklch(0.72 0.12 70), oklch(0.86 0.16 92), oklch(0.78 0.14 80), oklch(0.70 0.12 65));
+  background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 5s linear infinite; text-shadow: 0 1px 0 oklch(0.9 0.04 90 / 0.25);
+}
+@keyframes shimmer { to { background-position: 220% center; } }
+.ch-sub { font-size: var(--t-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .market { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); }
 .market select { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 9px; padding: 7px 11px; font-size: var(--t-sm); color: var(--text); cursor: pointer; }
 .market select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
