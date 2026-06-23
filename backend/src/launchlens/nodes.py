@@ -122,11 +122,11 @@ class Routing(BaseModel):
     )
     user_name: str = Field(
         default="", description="the user's name ONLY if they state it in this message "
-        "(e.g. 'I'm Riya', 'my name is Sam'); otherwise empty"
+        "(e.g. 'my name is ...', \"I'm ...\"); otherwise empty"
     )
     user_location: str = Field(
         default="", description="the user's city/country ONLY if they state it "
-        "(e.g. 'I'm based in Mumbai'); otherwise empty"
+        "(e.g. \"I'm based in ...\"); otherwise empty"
     )
 
 
