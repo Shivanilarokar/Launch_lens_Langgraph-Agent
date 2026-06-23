@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
     checkpointer = memory.get_checkpointer()
     store = memory.get_store()
     _state["graph"] = build_graph(checkpointer, store)
+    _state["store"] = store
     yield
     memory.close()
 
@@ -114,6 +115,17 @@ def threads():
     return {"threads": memory.list_threads(_state["graph"].checkpointer)}
 
 
+@app.get("/threads/{thread_id}/history")
+def thread_history(thread_id: str):
+    """Past user/assistant messages for a thread (to reopen an older chat)."""
+    vals = _state["graph"].get_state({"configurable": {"thread_id": thread_id}}).values or {}
+    out = []
+    for m in vals.get("messages", []):
+        if m.type in ("human", "ai") and getattr(m, "content", None):
+            out.append({"role": "user" if m.type == "human" else "assistant", "content": m.content})
+    return {"thread_id": thread_id, "messages": out}
+
+
 @app.get("/threads/{thread_id}/state")
 def thread_state(thread_id: str):
     vals = _state["graph"].get_state({"configurable": {"thread_id": thread_id}}).values or {}
@@ -122,6 +134,18 @@ def thread_state(thread_id: str):
         "summary": vals.get("summary", ""),
         "message_count": len(vals.get("messages", [])),
     }
+
+
+@app.get("/memory")
+def long_term_memory():
+    """Long-term, cross-thread facts (verdicts) from the Store — accessible from any session."""
+    facts = []
+    try:
+        for item in _state["store"].search(("launchlens", "facts"), limit=50):
+            facts.append(item.value)
+    except Exception:  # noqa: BLE001 - long-term memory is best-effort
+        pass
+    return {"facts": facts}
 
 
 @app.get("/health")

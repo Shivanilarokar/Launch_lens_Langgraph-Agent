@@ -1,143 +1,178 @@
-import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import { getMarkets, streamChat } from "./api";
+import { useEffect, useRef, useState } from 'react'
+import { api, streamChat } from './api'
+import Sidebar from './components/Sidebar.jsx'
+import ResearchRail from './components/ResearchRail.jsx'
+import Verdict, { isVerdict } from './components/Verdict.jsx'
+import ProductCard from './components/ProductCard.jsx'
 
-const newThread = () => "web-" + Math.random().toString(36).slice(2, 9);
+const LS_KEY = 'launchlens.convos.v1'
+const DEFAULT_TITLE = 'New chat'
+const uid = () => 'c-' + Math.random().toString(36).slice(2, 10)
+const loadConvos = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || [] } catch { return [] } }
+const saveConvos = (c) => localStorage.setItem(LS_KEY, JSON.stringify(c))
 
-function verdictBadge(text) {
-  const m = text.match(/VERDICT:\s*(GO|NO-GO|NICHE)/i);
-  if (!m) return null;
-  const v = m[1].toUpperCase();
-  const cls = v === "NO-GO" ? "verdict-NOGO" : v === "GO" ? "verdict-GO" : "verdict-NICHE";
-  return <span className={`verdict-badge ${cls}`}>{v}</span>;
-}
-
-function DemandSignal({ s }) {
-  if (s.error) return <div className="signal demand"><div className="label">{s.engine}</div><div className="kv">⚠ {s.error}</div></div>;
-  if (s.engine === "google_trends")
-    return (
-      <div className="signal demand">
-        <div className="label">📈 Google Trends</div>
-        <div className="kv">interest {s.trend_direction} ({s.change_pct}%)</div>
-        <div>{(s.related_rising || []).map((q) => <span className="chip" key={q}>↑ {q}</span>)}</div>
-      </div>
-    );
-  if (s.engine === "google_shopping") {
-    const b = s.price_band || {};
-    return <div className="signal demand"><div className="label">🛍️ Google Shopping</div><div className="kv">band {b.min}–{b.max} · {s.count} listings</div></div>;
-  }
-  if (s.engine === "google_news")
-    return <div className="signal demand"><div className="label">📰 Google News</div><div className="kv">{(s.headlines || []).length} headlines</div>{(s.headlines || []).slice(0, 2).map((h, i) => <div className="kv" key={i}>• {h.title}</div>)}</div>;
-  return <div className="signal demand"><div className="label">{s.engine}</div></div>;
-}
-
-function SupplySignal({ s }) {
-  if (s.error) return <div className="signal supply"><div className="label">{s.source}</div><div className="kv">⚠ {s.error}</div></div>;
-  if (s.source === "amazon_search")
-    return (
-      <div className="signal supply">
-        <div className="label">📦 Amazon top sellers</div>
-        {(s.products || []).slice(0, 4).map((p) => <div className="kv" key={p.asin}>• {p.title?.slice(0, 42)} — {p.currency || ""}{p.price} ★{p.rating}</div>)}
-      </div>
-    );
-  return <div className="signal supply"><div className="label">📦 {s.source}</div></div>;
-}
+const HINTS = [
+  'Should I launch a stainless-steel insulated water bottle in India under ₹1,500?',
+  'Is a bamboo toothbrush worth launching in the US under $5?',
+  'Compare a cork yoga mat against the competition in India',
+]
 
 export default function App() {
-  const [markets, setMarkets] = useState([]);
-  const [domain, setDomain] = useState("in");
-  const [threadId, setThreadId] = useState(newThread);
-  const [turns, setTurns] = useState([]);
-  const [demand, setDemand] = useState([]);
-  const [supply, setSupply] = useState([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [activity, setActivity] = useState([]);
-  const streamRef = useRef(null);
+  const [conversations, setConversations] = useState(loadConvos)
+  const [activeId, setActiveId] = useState(null)
+  const [turns, setTurns] = useState([])
+  const [demand, setDemand] = useState([])
+  const [supply, setSupply] = useState([])
+  const [activity, setActivity] = useState([])
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [markets, setMarkets] = useState([])
+  const [domain, setDomain] = useState('in')
+  const [memoryFacts, setMemoryFacts] = useState([])
+  const streamRef = useRef(null)
 
-  useEffect(() => { getMarkets().then((d) => { setMarkets(d.marketplaces || []); setDomain(d.default || "in"); }).catch(() => {}); }, []);
-  useEffect(() => { streamRef.current?.scrollTo(0, streamRef.current.scrollHeight); }, [turns, activity]);
+  const refreshMemory = () => api.memory().then((d) => setMemoryFacts(d.facts || [])).catch(() => {})
 
-  async function send() {
-    const msg = input.trim();
-    if (!msg || busy) return;
-    setInput("");
-    setBusy(true);
-    setDemand([]); setSupply([]); setActivity([]);
-    setTurns((t) => [...t, { role: "user", content: msg }, { role: "assistant", content: "" }]);
+  useEffect(() => {
+    api.marketplaces().then((m) => { setMarkets(m.marketplaces || []); setDomain(m.default || 'in') }).catch(() => {})
+    refreshMemory()
+    setConversations((prev) => {
+      if (prev.length) { setActiveId(prev[0].id); return prev }
+      const c = [{ id: uid(), title: DEFAULT_TITLE, ts: Date.now() }]
+      setActiveId(c[0].id); saveConvos(c); return c
+    })
+  }, [])
+
+  useEffect(() => { streamRef.current?.scrollTo(0, streamRef.current.scrollHeight) }, [turns, activity, busy])
+
+  const newChat = () => {
+    const c = { id: uid(), title: DEFAULT_TITLE, ts: Date.now() }
+    const next = [c, ...conversations]
+    setConversations(next); saveConvos(next)
+    setActiveId(c.id); setTurns([]); setDemand([]); setSupply([]); setActivity([])
+  }
+
+  const selectConvo = async (id) => {
+    setActiveId(id); setTurns([]); setDemand([]); setSupply([]); setActivity([])
+    try {
+      const hist = await api.history(id)
+      setTurns(hist.messages.map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })))
+    } catch { setTurns([]) }
+  }
+
+  const renameIfNew = (id, msg) => {
+    setConversations((prev) => {
+      const next = prev.map((c) => (c.id === id && c.title === DEFAULT_TITLE ? { ...c, title: msg.slice(0, 42) } : c))
+      saveConvos(next); return next
+    })
+  }
+
+  async function send(text) {
+    const msg = (text ?? input).trim()
+    if (!msg || busy || !activeId) return
+    setInput(''); setBusy(true)
+    setDemand([]); setSupply([]); setActivity([])
+    renameIfNew(activeId, msg)
+    setTurns((t) => [...t, { role: 'user', content: msg }, { role: 'assistant', content: '', products: [] }])
+
+    const patch = (fn) => setTurns((t) => { const c = [...t]; const last = { ...c[c.length - 1] }; fn(last); c[c.length - 1] = last; return c })
 
     try {
-      await streamChat({ threadId, message: msg, domain }, (event, data) => {
-        if (event === "research") {
-          if (data.node === "router") setActivity((a) => [...a, `intent: ${data.route} → ${data.query || "(followup)"}`]);
-          else if (data.side === "demand") setDemand((d) => [...d, data.signal]);
-          else if (data.side === "supply") setSupply((s) => [...s, data.signal]);
-        } else if (event === "tool") {
-          setActivity((a) => [...a, `calling tool: ${data.calls.join(", ")}`]);
-        } else if (event === "token") {
-          setTurns((t) => { const c = [...t]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + data.text }; return c; });
-        } else if (event === "error") {
-          setTurns((t) => { const c = [...t]; c[c.length - 1] = { role: "assistant", content: "⚠ " + data.message }; return c; });
-        }
-      });
+      await streamChat({ threadId: activeId, message: msg, domain }, (ev, data) => {
+        if (ev === 'research') {
+          if (data.node === 'router') setActivity((a) => [...a, `intent: ${data.route} → ${data.query || '(followup)'}`])
+          else if (data.side === 'demand') setDemand((d) => [...d, data.signal])
+          else if (data.side === 'supply') {
+            setSupply((s) => [...s, data.signal])
+            if (data.signal?.products) patch((l) => { l.products = [...(l.products || []), ...data.signal.products] })
+          }
+        } else if (ev === 'tool') setActivity((a) => [...a, `tool: ${data.calls.join(', ')}`])
+        else if (ev === 'token') patch((l) => { l.content += data.text })
+        else if (ev === 'error') patch((l) => { l.content = '⚠ ' + data.message; l.error = true })
+      })
     } catch (e) {
-      setTurns((t) => { const c = [...t]; c[c.length - 1] = { role: "assistant", content: "⚠ " + e.message + " — is the backend running on :8010?" }; return c; });
+      patch((l) => { l.content = '⚠ ' + e.message + ' — is the backend on :8010?'; l.error = true })
     } finally {
-      setBusy(false);
-      setActivity([]);
+      setBusy(false); setActivity([]); refreshMemory()
     }
   }
 
+  const activeTitle = conversations.find((c) => c.id === activeId)?.title || 'LaunchLens'
+
   return (
     <div className="app">
-      <div className="topbar">
-        <div className="brand">LaunchLens <small>🔭 demand × supply → verdict</small></div>
-        <div className="spacer" />
-        <select value={domain} onChange={(e) => setDomain(e.target.value)}>
-          {markets.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
-        </select>
-        <button onClick={() => { setThreadId(newThread()); setTurns([]); setDemand([]); setSupply([]); }}>New chat</button>
-      </div>
+      <Sidebar
+        conversations={conversations}
+        activeId={activeId}
+        onSelect={selectConvo}
+        onNew={newChat}
+        memoryFacts={memoryFacts}
+        onPickMemory={(f) => setInput(`What did we conclude about ${f.product}?`)}
+      />
 
-      <div className="main">
-        <div className="chat">
-          <div className="stream" ref={streamRef}>
-            {turns.length === 0 && <div className="empty">Ask: “Should I launch a stainless-steel insulated water bottle in India under ₹1,500?”</div>}
-            {turns.map((t, i) =>
-              t.role === "user" ? (
-                <div className="bubble user" key={i}>{t.content}</div>
-              ) : (
-                <div className="bubble assistant" key={i}>
-                  {verdictBadge(t.content)}
-                  {t.content ? <ReactMarkdown>{t.content}</ReactMarkdown> : <span className="empty">…</span>}
-                </div>
-              )
-            )}
-            {busy && activity.length > 0 && (
-              <div className="activity">
-                {activity.map((a, i) => <div className="row" key={i}><span className="dot" />{a}</div>)}
+      <main className="chat">
+        <header className="chat-head">
+          <div className="ch-title">{activeTitle === DEFAULT_TITLE ? 'New chat' : activeTitle}</div>
+          <label className="market">
+            Market
+            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+              {markets.map((m) => <option key={m.code} value={m.code}>amazon.{m.code} · {m.currency}</option>)}
+            </select>
+          </label>
+        </header>
+
+        <div className="stream" ref={streamRef}>
+          {turns.length === 0 && !busy && (
+            <div className="welcome">
+              <div className="w-logo">🔭</div>
+              <h1>Should you launch it?</h1>
+              <p>Describe a product idea. LaunchLens fuses live demand (Google) with supply (Amazon) into a detailed Go / No-Go / Niche verdict — and remembers it across every chat.</p>
+              <div className="w-hints">
+                {HINTS.map((h) => <button key={h} onClick={() => send(h)}>{h}</button>)}
               </div>
-            )}
-          </div>
-          <div className="composer">
-            <input
+            </div>
+          )}
+
+          {turns.map((t, i) =>
+            t.role === 'user' ? (
+              <div className="msg user" key={i}><div className="ubub">{t.content}</div></div>
+            ) : (
+              <div className="msg assistant" key={i}>
+                <div className="who"><span className="who-ic">🔭</span> LaunchLens</div>
+                {t.content
+                  ? (isVerdict(t.content)
+                      ? <Verdict content={t.content} />
+                      : <div className="md"><Verdict content={t.content} /></div>)
+                  : <div className="typing"><span /><span /><span /></div>}
+                {t.products?.length > 0 && (
+                  <div className="pcards">
+                    {t.products.map((p, j) => <ProductCard key={p.asin || j} product={p} />)}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+        </div>
+
+        <div className="composer">
+          <div className="composer-inner">
+            <textarea
               value={input}
-              placeholder="Describe a product idea and market…"
+              placeholder="Message LaunchLens…  (Enter to send)"
+              rows={1}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               disabled={busy}
             />
-            <button onClick={send} disabled={busy || !input.trim()}>{busy ? "…" : "Ask"}</button>
+            <button onClick={() => send()} disabled={busy || !input.trim()} aria-label="Send">
+              {busy ? '…' : '↑'}
+            </button>
           </div>
+          <div className="composer-foot">LaunchLens fuses SerpApi + Oxylabs · live data</div>
         </div>
+      </main>
 
-        <div className="rail">
-          <h3>Demand · SerpApi</h3>
-          {demand.length ? demand.map((s, i) => <DemandSignal s={s} key={i} />) : <div className="empty">no demand signals yet</div>}
-          <h3>Supply · Oxylabs</h3>
-          {supply.length ? supply.map((s, i) => <SupplySignal s={s} key={i} />) : <div className="empty">no supply signals yet</div>}
-        </div>
-      </div>
+      <ResearchRail activity={activity} demand={demand} supply={supply} busy={busy} />
     </div>
-  );
+  )
 }
