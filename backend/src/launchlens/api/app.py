@@ -80,8 +80,13 @@ def chat(req: ChatRequest):
                     for node, upd in chunk.items():
                         if not upd:
                             continue
-                        if node == "router" or node.startswith("pull_"):
+                        if node == "router":
                             yield _sse("research", _research_event(node, upd))
+                        elif node.startswith("pull_"):
+                            for sig in upd.get("demand_signals", []):
+                                yield _sse("research", {"node": node, "side": "demand", "signal": sig})
+                            for sig in upd.get("supply_signals", []):
+                                yield _sse("research", {"node": node, "side": "supply", "signal": sig})
                         elif node == "agent":
                             m = upd["messages"][-1]
                             if getattr(m, "tool_calls", None):

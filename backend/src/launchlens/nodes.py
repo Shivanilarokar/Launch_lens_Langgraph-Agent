@@ -246,8 +246,28 @@ def pull_news(payload: dict) -> dict:
 
 
 def pull_amazon(payload: dict) -> dict:
-    """Supply branch: Amazon search (top sellers, prices, ratings)."""
-    return _supply("amazon_search", payload)
+    """Supply branch (TWO Oxylabs sources, sequential within this parallel branch):
+    1) amazon_search for the top sellers/prices/ratings, then
+    2) amazon_product on the top-selling ASIN to mine REAL review complaints.
+    This guarantees >=2 Oxylabs sources per research turn and grounds the
+    differentiation in actual reviews (no invented complaints)."""
+    query = payload["query"]
+    domain = payload.get("domain", config.DEFAULT_DOMAIN)
+    signals: list = []
+    try:
+        search = tools.fetch_amazon_search(query, domain)
+        signals.append(search)
+        top = next((p for p in (search.get("products") or []) if p.get("asin")), None)
+        if top:
+            try:
+                signals.append(tools.fetch_amazon_product(top["asin"], domain))
+            except Exception as exc:  # noqa: BLE001 - reviews are best-effort
+                logger.exception("amazon_product failed for %s", top.get("asin"))
+                signals.append({"source": "amazon_product", "error": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("amazon_search failed")
+        signals.append({"source": "amazon_search", "error": str(exc)})
+    return {"supply_signals": signals}
 
 
 # ──────────────────── concept 4: the fusing agent + tools ─────────────────────
@@ -305,10 +325,11 @@ Only call a tool to get genuinely NEW information not shown above — e.g. amazo
 for competing offers, amazon_bestsellers, or any engine for a DIFFERENT market the user
 newly asks about.
 
-GROUND DIFFERENTIATION IN REAL REVIEWS: for a launch verdict, take the top-selling ASIN
-from the amazon_search results above and call `amazon_product` on it ONCE to read its
-recent review complaints, then turn those concrete complaints (e.g. "leaks", "flimsy lid")
-into the differentiation angle. Do not invent complaints you have not read.
+GROUND DIFFERENTIATION IN REAL REVIEWS: the SUPPLY signals already include an
+`amazon_product` entry with the top seller's recent review snippets and rating
+breakdown. Base the "Differentiation" line on those ACTUAL complaints (e.g. "leaks",
+"flimsy lid"). Never invent complaints that are not present in the signals; if no
+review data is available, say so plainly.
 
 Be concise and specific; cite real numbers from the signals. Never invent data."""
 

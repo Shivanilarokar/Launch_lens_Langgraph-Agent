@@ -28,6 +28,17 @@ function SupplySignal({ s }) {
         ))}
       </div>
     )
+  if (s.source === 'amazon_product') {
+    const r = s.product?.reviews || {}
+    return (
+      <div className="signal">
+        <div className="sig-l supply">🔍 Top seller reviews · ★{r.rating ?? '–'} ({r.reviews_count ?? 0})</div>
+        {(r.recent_reviews || []).slice(0, 3).map((rv, i) => (
+          <div className="sig-kv" key={i}>“{(rv.text || rv.title || '').slice(0, 64)}”</div>
+        ))}
+      </div>
+    )
+  }
   return <div className="signal"><div className="sig-l supply">📦 {s.source}</div></div>
 }
 
