@@ -101,8 +101,6 @@ export default function App() {
     }
   }
 
-  const activeTitle = conversations.find((c) => c.id === activeId)?.title || 'LaunchLens'
-
   return (
     <div className="app">
       <Sidebar
@@ -119,7 +117,6 @@ export default function App() {
         <header className="chat-head">
           <div className="ch-id">
             <span className="ch-tagline">A Market Intelligence System</span>
-            {activeTitle !== DEFAULT_TITLE && <span className="ch-sub">{activeTitle}</span>}
           </div>
           <label className="market">
             Market

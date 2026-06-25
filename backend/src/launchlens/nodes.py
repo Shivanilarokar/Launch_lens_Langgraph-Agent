@@ -1,11 +1,11 @@
-"""The graph's nodes — where each LangGraph concept actually lives.
+"""The graph's nodes.
 
-  manage_memory   concept 5  summarize long threads + reset per-turn scratchpad
-  router          concept 3  classify the user's intent, extract product + market
-  route_research  concept 2  fan out Send() jobs across individual engines
-  pull_trends/shopping/news  concept 2  demand engines, each its own parallel branch
-  pull_amazon                concept 2  supply source, parallel branch
-  agent           concept 4  fuse demand + supply into a Go/No-Go/Niche verdict (ReAct)
+  manage_memory   summarize long threads + reset the per-turn research scratchpad
+  router          classify the user's intent, extract the product + market
+  route_research  fan out Send() jobs across the individual research engines
+  pull_trends/shopping/news  demand engines, each its own parallel branch
+  pull_amazon                supply source (search + reviews), parallel branch
+  agent           fuse demand + supply into a Go/No-Go/Niche verdict (ReAct loop)
 """
 import json
 import logging
@@ -53,7 +53,7 @@ def _last_human(messages) -> str:
     return ""
 
 
-# ───────────────────────── concept 5: memory management ───────────────────────
+# ───────────────────────────── memory management ──────────────────────────────
 SUMMARY_PROMPT = """You maintain a running summary of a founder's product-research \
 conversation with the LaunchLens agent.
 
@@ -102,7 +102,7 @@ def manage_memory(state: LaunchLensState) -> dict:
     return updates
 
 
-# ───────────────────────────── concept 3: routing ────────────────────────────
+# ───────────────────────────────── intent routing ────────────────────────────
 class Routing(BaseModel):
     """Structured router decision."""
     intent: Literal["full_report", "demand", "pricing", "reviews", "followup", "chitchat"] = Field(
@@ -179,7 +179,7 @@ def router(state: LaunchLensState) -> dict:
             "user_name": user_name, "user_location": user_location}
 
 
-# ─────────────────────── concept 2: fan-out via Send ──────────────────────────
+# ─────────────────────────── parallel fan-out via Send ────────────────────────
 # Each research engine is its OWN node, so the graph shows real parallel branches
 # (pull_trends ‖ pull_shopping ‖ pull_news ‖ pull_amazon) that merge at `agent`.
 # `route_research` returns a LIST of Send() — LangGraph runs them in one super-step.
@@ -194,8 +194,8 @@ RESEARCH_PLAN = {
 
 
 def route_research(state: LaunchLensState):
-    """Conditional edge (concept 3 → 2): fan OUT to parallel engine nodes via Send,
-    or go straight to `agent` for a followup that needs no new research."""
+    """Conditional edge: fan OUT to the parallel engine nodes via Send, or go
+    straight to `agent` for a followup/chitchat that needs no new research."""
     route = state["route"]
     query = state.get("product_query", "")
     domain = state.get("domain", config.DEFAULT_DOMAIN)
@@ -270,7 +270,7 @@ def pull_amazon(payload: dict) -> dict:
     return {"supply_signals": signals}
 
 
-# ──────────────────── concept 4: the fusing agent + tools ─────────────────────
+# ─────────────────────────── the fusing agent + tools ─────────────────────────
 AGENT_PROMPT = """You are LaunchLens, a market-intelligence agent for founders.
 You FUSE two worlds into one answer:
   • DEMAND (Google via SerpApi): what the market wants — search trend, related
@@ -310,7 +310,16 @@ products with their prices and ratings from the SUPPLY signals, add the demand
 context if useful, and DO NOT output a VERDICT line or the verdict template.
 
 ONLY when they ask whether to launch / price / position a product, give a clear
-verdict in this shape:
+verdict. Choose it honestly from the FUSED evidence (do not default to GO):
+  - GO    — demand is healthy AND there is a clear price or quality gap to win the
+            broad market at their target price.
+  - NICHE — demand exists but the mainstream market is saturated or commoditized;
+            launching broadly would just add another me-too listing. Only a specific
+            sub-segment, premium angle, or underserved use-case is viable — NAME it.
+  - NO-GO — demand is weak/declining, or the market is saturated with no defensible
+            gap at their target price.
+
+Give the verdict in this shape:
 
   VERDICT: GO / NO-GO / NICHE
   • Demand: <rising/flat/declining + the hot related searches>
@@ -386,7 +395,7 @@ def should_continue(state: LaunchLensState):
 def remember(state: LaunchLensState, runtime: Runtime) -> dict:
     """Long-term memory WRITE (selective): persist ONLY a real launch verdict as a
     minimal, durable fact — {product, market, verdict} — keyed by product+market,
-    so it is recalled in any future thread (concept: bonus long-term memory).
+    so it is recalled in any future thread (long-term, cross-thread memory).
 
     We deliberately store little: only when the turn was a full launch report
     (route == "full_report") AND produced a GO/NO-GO/NICHE verdict. Demand-only,

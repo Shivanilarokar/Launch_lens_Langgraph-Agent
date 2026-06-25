@@ -2,9 +2,9 @@
 
 Two audiences read this file:
 
-  1. The LLM agent (concept 4) — it sees the `@tool` functions below and their
-     DOCSTRINGS, and decides which to call during the ReAct loop for follow-ups.
-  2. The fan-out workers (concept 2) — they call the plain `fetch_*` functions
+  1. The LLM agent — it sees the `@tool` functions below and their DOCSTRINGS,
+     and decides which to call during the ReAct loop for follow-ups.
+  2. The parallel research workers — they call the plain `fetch_*` functions
      directly via the DEMAND_ENGINES / SUPPLY_ENGINES registries.
 
 Every result is SLIMMED to the handful of fields the verdict actually needs —
@@ -255,11 +255,13 @@ def fetch_amazon_product(asin: str, domain: str = config.DEFAULT_DOMAIN) -> dict
 def fetch_amazon_bestsellers(query: str, domain: str = config.DEFAULT_DOMAIN) -> dict:
     """Amazon bestsellers for a category — what is actually selling."""
     content = oxylabs_client.scrape("amazon_bestsellers", query, domain)
-    raw = content.get("results")
+    # Oxylabs returns bestsellers as either a dict {"results": [...]/{"organic": [...]}}
+    # or a bare list of rows depending on the page parser — normalise both.
+    raw = content.get("results") if isinstance(content, dict) else content
     if isinstance(raw, list):
         rows = raw
     elif isinstance(raw, dict):
-        rows = raw.get("organic", [])
+        rows = raw.get("organic") or raw.get("bestsellers") or []
     else:
         rows = []
     items = [
@@ -294,7 +296,7 @@ def fetch_amazon_pricing(asin: str, domain: str = config.DEFAULT_DOMAIN) -> dict
 
 
 # ════════════════════ registries used by the fan-out workers ══════════════════
-# (concept 2) router dispatches Send() jobs keyed by these engine names.
+# The fan-out workers dispatch Send() jobs keyed by these engine names.
 DEMAND_ENGINES = {
     "google_trends": fetch_trends,
     "google_shopping": fetch_shopping,
@@ -308,7 +310,7 @@ SUPPLY_ENGINES = {
 }
 
 
-# ═══════════════════ @tool wrappers bound to the agent (concept 4) ════════════
+# ════════════════════════ @tool wrappers bound to the agent ═══════════════════
 @tool
 @safe
 def trend_demand(query: str, domain: str = config.DEFAULT_DOMAIN) -> str:

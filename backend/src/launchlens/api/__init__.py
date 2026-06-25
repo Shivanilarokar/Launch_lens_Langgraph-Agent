@@ -1,1 +1,1 @@
-"""FastAPI layer (bonus) — HTTP + streaming around the LaunchLens graph."""
+"""FastAPI layer — HTTP + streaming around the LaunchLens graph."""

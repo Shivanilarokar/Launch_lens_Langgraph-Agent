@@ -32,7 +32,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 body {
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
@@ -49,7 +49,8 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: oklch(0.82 0.03 285); }
 button { font-family: inherit; }
 
-.app { display: grid; grid-template-columns: 270px 1fr 348px; height: 100vh; }
+.app { display: grid; grid-template-columns: 270px 1fr 348px; height: 100dvh; overflow: hidden; }
+.app > * { min-height: 0; min-width: 0; }
 @media (max-width: 1120px) { .app { grid-template-columns: 246px 1fr; } .rail { display: none; } }
 @media (max-width: 720px) { .app { grid-template-columns: 1fr; } .sidebar { display: none; } }
 

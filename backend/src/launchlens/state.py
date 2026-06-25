@@ -1,8 +1,8 @@
-"""Graph state (concept 1: typed state + reducers).
+"""Typed graph state and its reducers.
 
 `messages` uses LangGraph's add_messages reducer (append + honour RemoveMessage).
 `demand_signals` / `supply_signals` use a custom reducer so that:
-  - parallel fan-out workers (concept 2) APPEND their results (no clobbering), and
+  - the parallel research workers APPEND their results (no clobbering), and
   - the memory node can RESET them to [] at the start of each turn.
 Everything else overwrites (no reducer).
 """
@@ -23,11 +23,11 @@ def reset_or_extend(current: list, update) -> list:
 
 
 class LaunchLensState(TypedDict):
-    # Conversation + agent/tool loop (concepts 1, 4, 5)
+    # Conversation + agent/tool loop
     messages: Annotated[list, add_messages]
-    # Running summary of older turns (concept 5)
+    # Running summary of older turns (compressed by manage_memory)
     summary: str
-    # Router decision for this turn (concept 3)
+    # Router decision for this turn
     route: str
     # Extracted product idea and target market
     product_query: str
@@ -35,7 +35,7 @@ class LaunchLensState(TypedDict):
     # Founder details extracted this turn (persisted to long-term profile memory)
     user_name: str
     user_location: str
-    # Research scratchpad merged from the parallel fan-out (concept 2)
+    # Research scratchpad merged from the parallel fan-out
     demand_signals: Annotated[list, reset_or_extend]
     supply_signals: Annotated[list, reset_or_extend]
     # Full display transcript — every user/assistant turn, NEVER pruned (so the chat

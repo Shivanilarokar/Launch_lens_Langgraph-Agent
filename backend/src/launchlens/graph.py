@@ -1,4 +1,4 @@
-"""Graph construction & wiring (concept 1).
+"""Graph construction & wiring.
 
     START → manage_memory → router ─┬─(Send fan-out)→ pull_trends ──┐
                                     │                  pull_shopping ┤
@@ -34,13 +34,13 @@ def build_graph(checkpointer, store=None):
     """Build and compile the LaunchLens graph.
 
     checkpointer = short-term memory (per-thread). store = long-term, cross-thread
-    memory (bonus) — read by `agent`, written by `remember`.
+    memory — read by `agent`, written by `remember`.
     """
     g = StateGraph(LaunchLensState)
 
     g.add_node("manage_memory", nodes.manage_memory)
     g.add_node("router", nodes.router)
-    # concept 2: one node per research engine = visible parallel branches.
+    # One node per research engine = real parallel branches in the graph.
     # External-service nodes get exponential-backoff retries on transient failures.
     PARALLEL = {
         "pull_trends": nodes.pull_trends,
@@ -57,13 +57,13 @@ def build_graph(checkpointer, store=None):
 
     g.add_edge(START, "manage_memory")
     g.add_edge("manage_memory", "router")
-    # concepts 3 + 2: router fans OUT to parallel engine nodes (Send), or to agent.
+    # The router fans OUT to the parallel engine nodes (Send), or straight to agent.
     g.add_conditional_edges(
         "router", nodes.route_research, [*PARALLEL.keys(), "agent"],
     )
     for name in PARALLEL:                       # every branch merges at the agent
         g.add_edge(name, "agent")
-    # concept 4: the agent ⇄ tools ReAct loop; on finish, persist to long-term memory.
+    # The agent ⇄ tools ReAct loop; on finish, persist to long-term memory.
     g.add_conditional_edges("agent", nodes.should_continue, ["tools", "remember"])
     g.add_edge("tools", "agent")
     g.add_edge("remember", END)

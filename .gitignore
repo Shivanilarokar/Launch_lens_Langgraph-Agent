@@ -28,8 +28,7 @@ node_modules/
 **/node_modules/
 **/dist/
 
-docs
-reference
-.claude1
+
+
 # Vite cache
 **/.vite/

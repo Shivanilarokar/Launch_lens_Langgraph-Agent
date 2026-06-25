@@ -1,4 +1,4 @@
-"""Checkpointer factory (concept 5: short-term memory that survives restarts).
+"""Checkpointer factory — short-term memory that survives restarts.
 
 Redis is the primary backend (cloud or local). If REDIS_URI is empty or the
 connection/setup fails, we fall back to SQLite so the app always runs. The graph
@@ -42,7 +42,7 @@ def get_checkpointer():
 
 
 def get_store():
-    """Return a long-term, cross-thread Store (concept: bonus long-term memory).
+    """Return a long-term, cross-thread Store for facts that outlive a single thread.
 
     Redis-backed if REDIS_URI is set & reachable (facts persist across restarts AND
     across every thread); otherwise an in-memory store so the graph still runs.

@@ -1,4 +1,4 @@
-"""FastAPI layer around the LaunchLens graph (bonus: API + streaming).
+"""FastAPI layer around the LaunchLens graph — HTTP + SSE streaming.
 
 Endpoints:
   POST /chat                  stream a turn as Server-Sent Events
