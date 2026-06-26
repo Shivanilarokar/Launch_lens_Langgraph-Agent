@@ -5,123 +5,81 @@
 A founder types a product idea in plain English. LaunchLens researches it **live**,
 **fusing two worlds** — *demand* (Google Trends / Shopping / News via **SerpApi**) with
 *supply* (Amazon search / product / pricing / bestsellers via **Oxylabs**) — and replies
-with a **Go / No-Go / Niche** verdict covering demand, price band, and positioning. Then
-it keeps chatting, with memory of the conversation.
+with a **Go / No-Go / Niche** verdict covering demand, price band, differentiation, and
+positioning. It then keeps chatting, with memory of the conversation across turns and
+across sessions.
 
 > Oxylabs tells you *what's selling*. SerpApi tells you *what the market wants*.
 > LaunchLens connects them — that fusion is the whole product.
 
 Built on **LangGraph** · Python 3.12 · provider-agnostic LLM (OpenAI or Claude) ·
-**Redis** checkpointer · CLI + (bonus) FastAPI streaming API + React UI.
+**Redis** checkpointer + cross-thread store · CLI + FastAPI streaming API + React UI.
 
 ---
 
 ## Architecture
 
-![LaunchLens graph (styled)](graph_out/graph_styled.png)
+![LaunchLens graph](graph_out/graph_styled.png)
 
-> Diagrams of the **same** graph: **`graph_out/graph_compiled.png`** is generated straight
-> from the live graph (`graph.get_graph().draw_mermaid_png()`); **`graph_out/graph_styled.png`**
-> (above) is the hand-styled, colour-by-concept version; **`graph_out/launchlens_architecture.drawio`**
-> is an editable draw.io version (open at draw.io → Export → PNG/PDF). Mermaid sources: `graph_out/*.mmd`.
-> The colourised mermaid is also inlined below so it renders on GitHub.
+*Editable sources live in `graph_out/`: `graph_styled.mmd` (Mermaid), `launchlens_architecture.drawio`
+(draw.io), and `graph_compiled.png` — generated straight from the live graph via
+`graph.get_graph().draw_mermaid_png()`.*
 
-```mermaid
-flowchart TD
-    U([Founder's question]) --> MM
-    MM["manage_memory<br/><i>SHORT-TERM MEMORY · summarize + prune long chats</i>"]:::mem --> R
-    R{"router<br/><i>ROUTING · classify intent</i>"}:::route
-    R -->|followup| AG
-    R -->|"demand / pricing / reviews / full report"| FO
+**Every turn:** `manage_memory` (summarize / prune if the thread is long) → `router`
+(classify intent) → **parallel fan-out** of research across the individual engines via
+`Send` → `agent` **fuses** demand × supply — mining real Amazon reviews for the
+differentiation angle — into the verdict → `remember` (persist the verdict cross-thread)
+→ END. Follow-ups skip research and answer from memory, calling tools on demand.
 
-    subgraph FO["FAN-OUT · parallel Send() across engines"]
-      direction LR
-      WT["📈 Google Trends"]:::fan
-      WS["🛍️ Google Shopping"]:::fan
-      WN["📰 Google News"]:::fan
-      WA["📦 Amazon search"]:::fan
-    end
-    FO --> AG
-
-    AG["agent<br/><i>AGENT + TOOLS · FUSE demand × supply</i>"]:::agent
-    AG <-->|ReAct tool loop| TL["Tools · slim JSON<br/>SerpApi: trends · shopping · news<br/>Oxylabs: search · product(reviews) · pricing · bestsellers"]:::agent
-    AG --> V["🎯 Go / No-Go / Niche verdict"]:::agent --> RM
-    RM["remember<br/><i>LONG-TERM MEMORY · save verdict as a cross-thread fact</i>"]:::mem --> E([END])
-    CP[("Checkpointer · short-term<br/>Redis · SQLite fallback")]:::mem -.->|per-thread state, every node| AG
-    LT[("Store · long-term<br/>facts across ALL threads")]:::mem -.->|recall + save| AG
-
-    classDef mem fill:#e8f0fe,stroke:#1a73e8,color:#1a3a6b;
-    classDef route fill:#fef7e0,stroke:#f9ab00,color:#5f4500;
-    classDef fan fill:#e6f4ea,stroke:#34a853,color:#0b5132;
-    classDef agent fill:#fce8e6,stroke:#ea4335,color:#5f1b14;
-```
-
-Every turn: **manage memory** (summarize if long) → **route** by intent → **fan out**
-research across individual engines in parallel → **agent fuses** both sides, mining real
-Amazon reviews for the differentiation angle, into the verdict. Follow-ups skip research
-and answer from memory, calling tools on demand.
-
-### Data sources used (live)
+### Data sources (live)
 
 | Side | Provider | Used | Produces |
 |------|----------|------|----------|
-| Demand | SerpApi | `google_trends`, `google_shopping`, `google_news` (3 of 4) | trend direction + related queries, cross-retailer price band, recalls/launches |
-| Supply | Oxylabs | `amazon_search`, `amazon_product` (reviews), `amazon_pricing`, `amazon_bestsellers` (4 of 5) | top sellers, prices, ratings, **review-gap mining**, competing offers |
+| Demand | SerpApi | `google_trends`, `google_shopping`, `google_news` | trend direction + related queries, cross-retailer price band, recalls / launches |
+| Supply | Oxylabs | `amazon_search`, `amazon_product` (reviews), `amazon_pricing`, `amazon_bestsellers` | top sellers, prices, ratings, **review-gap mining**, competing offers |
 
-Requirement is ≥2 each; we ship 3 + 4. `google_search` and Oxylabs `universal` are
-intentionally not used (not needed for the verdict).
+A research turn always fires **3 demand engines in parallel** plus a **supply branch that
+runs 2 Oxylabs sources** (`amazon_search` → then `amazon_product` on the top ASIN, so the
+differentiation angle is grounded in *real* review snippets).
 
-### How this scales
+### How it scales
 
 - **Stateless app, state in the DB:** all conversation state lives in the checkpointer
-  (Redis Cloud), keyed by `thread_id` — the process holds no memory, so you can run
-  many backend replicas behind a load balancer.
-- **No global mutable state:** the marketplace/domain is passed explicitly through each
-  tool call (not a global), so concurrent users on different markets never collide.
+  (Redis), keyed by `thread_id` — the process holds no memory, so you can run many backend
+  replicas behind a load balancer.
+- **No global mutable state:** the marketplace/domain is passed explicitly through every
+  tool call, so concurrent users on different markets never collide.
 - **Bounded context:** the summarization node caps token growth on long threads.
-- **Config via env:** keys, model, market, and Redis URI are all env-driven; swap the
-  LLM (OpenAI↔Claude) or the checkpointer (Redis↔SQLite↔Postgres) with no code change.
+- **Config via env:** keys, model, market, and Redis URI are all env-driven; swap the LLM
+  (OpenAI ↔ Claude) or the checkpointer (Redis ↔ SQLite) with no code change.
 - **Token discipline:** every tool returns slim JSON, never raw scrapes.
-- **Resilience & cost:** every external node (workers, agent, tools) retries transient
-  failures with **exponential backoff** (`graph.py` `RETRY`); provider responses are
-  **cached** on disk with a TTL (`cache.py`) to spare the SerpApi free tier / Oxylabs credits.
+- **Resilience & cost:** every external node retries transient failures with **exponential
+  backoff** (`graph.py:25` `RETRY`); provider responses are **cached** on disk with a TTL
+  (`cache.py`) to spare the SerpApi free tier / Oxylabs credits.
 
-### Memory: short-term (required) + long-term (bonus) — both implemented
+### Memory — short-term + long-term
 
-- **Short-term (required concept 5):** a **checkpointer** (`memory.py:21` `get_checkpointer`,
-  Redis → SQLite fallback) that survives restarts, keyed by `thread_id`, plus a
-  **summarization node** (`nodes.py` `manage_memory`).
-- **Long-term (bonus): a LangGraph `Store`** (`memory.py:44` `get_store`, Redis-backed)
-  holding **facts across ALL threads** — launch verdicts and the founder's name/location.
-  The `agent` reads prior verdicts (`nodes.py:316` `_recall_facts`) and the profile
-  (`nodes.py:328` `_recall_profile`); the **`remember`** node (`nodes.py:365`) writes them.
-  Verified: a verdict/profile from one thread is recalled in a brand-new thread.
+- **Short-term:** a **checkpointer** (`memory.py:21` `get_checkpointer`, Redis → SQLite
+  fallback) that survives restarts, keyed by `thread_id`, plus a **summarization node**
+  (`nodes.py:79` `manage_memory`) that compresses old turns once a thread passes a limit.
+- **Long-term:** a LangGraph **`Store`** (`memory.py:44` `get_store`, Redis-backed) holding
+  **facts across ALL threads** — launch verdicts and the founder's name/location. The
+  `agent` reads prior verdicts (`nodes.py:346` `_recall_facts`) and the profile
+  (`nodes.py:358` `_recall_profile`); the `remember` node (`nodes.py:395`) writes them.
+  A verdict from one thread is recalled in a brand-new thread.
 
 ---
 
-## The 5 required LangGraph concepts → exact location
+## The 5 LangGraph concepts → exact location
 
 | # | Concept | Where it lives (file · function · line) |
 |---|---------|------------------------------------------|
-| 1 | **Graph construction & typed state + reducers** | `backend/src/launchlens/state.py:25` `LaunchLensState`; custom reducer `state.py:18` `reset_or_extend`, messages reducer `state.py:27`, transcript reducer `state.py:43`; wiring & compile `backend/src/launchlens/graph.py:33` `build_graph` |
-| 2 | **Fan-out (parallel) + merge** | `backend/src/launchlens/nodes.py:196` `route_research` (returns a list of `Send`); **four parallel branch nodes** `nodes.py:233` `pull_trends`, `nodes.py:238` `pull_shopping`, `nodes.py:243` `pull_news`, `nodes.py:248` `pull_amazon` (all run in one super-step → merge at `agent`); merge via reducer `state.py:39`; edges in `graph.py:33` `build_graph` (lines 61-65) |
-| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:156` `router` (LLM intent classification → `Routing` at `nodes.py:106`); conditional edge `nodes.py:196` `route_research` (intent → branches, with `chitchat`/`followup` default to the agent) wired in `graph.py:61` |
-| 4 | **Agent node + tools** | `backend/src/launchlens/nodes.py:351` `agent` (binds tools, fuses demand+supply); ReAct loop `nodes.py:357` `should_continue` + `graph.py:67`; tools `backend/src/launchlens/tools.py:368` `ALL_TOOLS` (e.g. `tools.py:314` `trend_demand`), wrapped by `safe` at `tools.py:27` — all return **slim JSON** |
-| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:79` `manage_memory` (RemoveMessage prune, cuts on a human boundary) |
-| ★ | **Bonus — long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store` (Redis Store); read `nodes.py:316` `_recall_facts` + `nodes.py:328` `_recall_profile`; write `nodes.py:365` `remember` |
-
----
-
-## Data integration (demand × supply, fused)
-
-**Demand — SerpApi** (3 engines): `google_trends` (interest direction + hot related
-queries), `google_shopping` (cross-retailer price band), `google_news` (launches/recalls).
-**Supply — Oxylabs** (4 sources): `amazon_search`, `amazon_product` (with review-gap
-mining), `amazon_bestsellers`, `amazon_pricing`.
-
-Tools live in `backend/src/launchlens/tools.py` and return **slimmed JSON**, never raw
-scrapes (token discipline). The `agent` node is explicitly prompted to fuse both sides
-into one verdict (`nodes.py:254` `AGENT_PROMPT`).
+| 1 | **Typed StateGraph + reducers** | `backend/src/launchlens/state.py:25` `LaunchLensState`; custom reducer `state.py:18` `reset_or_extend`; `messages` reducer `state.py:27`; `transcript` reducer `state.py:43`; graph wiring & compile `backend/src/launchlens/graph.py:33` `build_graph` |
+| 2 | **Parallel fan-out (`Send`) + merge** | conditional edge `backend/src/launchlens/nodes.py:196` `route_research` (returns a list of `Send`); four parallel branch nodes `nodes.py:233` `pull_trends`, `:238` `pull_shopping`, `:243` `pull_news`, `:248` `pull_amazon` (one super-step → merge at `agent`); merge reducer `state.py:39`; edges in `graph.py:33` `build_graph` |
+| 3 | **Routing (conditional edges)** | `backend/src/launchlens/nodes.py:156` `router` (LLM intent classification → `Routing` `nodes.py:106`); conditional edge `nodes.py:196` `route_research` (intent → branches; `chitchat`/`followup` go straight to the agent) wired in `graph.py:33` |
+| 4 | **Agent node + tools (ReAct)** | `backend/src/launchlens/nodes.py:381` `agent` (binds tools, fuses demand + supply); ReAct loop `nodes.py:387` `should_continue` + `graph.py`; prompt `nodes.py:274` `AGENT_PROMPT`; tools `backend/src/launchlens/tools.py:370` `ALL_TOOLS` (e.g. `tools.py:316` `trend_demand`), each wrapped by `safe` `tools.py:27` — all return **slim JSON** |
+| 5 | **Short-term memory (checkpointer + summarization)** | checkpointer `backend/src/launchlens/memory.py:21` `get_checkpointer` (Redis → SQLite fallback); summarization node `backend/src/launchlens/nodes.py:79` `manage_memory` (prunes with `RemoveMessage`, cutting on a human-message boundary) |
+| ★ | **Long-term, cross-thread memory (`Store`)** | `backend/src/launchlens/memory.py:44` `get_store`; read `nodes.py:346` `_recall_facts` + `nodes.py:358` `_recall_profile`; write `nodes.py:395` `remember` |
 
 ---
 
@@ -133,10 +91,10 @@ Requirements: [uv](https://docs.astral.sh/uv/), Node 18+, and API keys.
 # 1. Keys
 cp .env.example .env        # fill in OPENAI_API_KEY, SERPAPI_API_KEY, OXYLABS_*, REDIS_URI
 
-# 2. Backend env (Python 3.12, installs the launchlens package editable)
+# 2. Backend (Python 3.12; installs the launchlens package editable, with the API extra)
 uv sync --extra api
 
-# 3. Frontend deps (bonus UI)
+# 3. Frontend deps
 cd frontend && npm install && cd ..
 ```
 
@@ -145,13 +103,13 @@ cd frontend && npm install && cd ..
 ```ini
 LLM_MODEL=openai:gpt-4o-mini          # or anthropic:claude-haiku-4-5-20251001 (+ ANTHROPIC_API_KEY)
 OPENAI_API_KEY=...
-SERPAPI_API_KEY=...
-OXYLABS_USERNAME=...
+SERPAPI_API_KEY=...                   # demand: Google Trends / Shopping / News
+OXYLABS_USERNAME=...                  # supply: Amazon search / product / pricing / bestsellers
 OXYLABS_PASSWORD=...
-AMAZON_DOMAIN=in
+AMAZON_DOMAIN=in                      # default market: in, com, co.uk, de, ca, com.au, ae, co.jp
 REDIS_URI=redis://default:<pw>@<host>:<port>   # Redis Cloud or local; empty → SQLite fallback
-MAX_MESSAGES=12
-KEEP_LAST=6
+MAX_MESSAGES=12                       # summarize once a thread grows past this
+KEEP_LAST=6                           # messages kept verbatim after summarizing
 ```
 
 ---
@@ -159,10 +117,10 @@ KEEP_LAST=6
 ## Run
 
 ```bash
-# CLI (the graded core)
+# CLI
 uv run python main.py
 
-# Bonus: API (SSE streaming) + React UI
+# API (SSE streaming) + React UI
 uv run uvicorn launchlens.api.app:app --port 8010      # terminal 1
 cd frontend && npm run dev                              # terminal 2 → http://localhost:5173
 ```
@@ -174,39 +132,55 @@ CLI commands: `/market <code>`, `/markets`, `/state`, `/new`, `/help`, `/quit`.
 ## Demo script (shows memory across turns)
 
 1. `Should I launch a stainless-steel insulated water bottle in India under ₹1,500?`
-   → full fan-out + a **Go/No-Go/Niche** verdict.
-2. `What about the US market?` → recalls the idea, re-researches `com`.
+   → full parallel fan-out + a **Go / No-Go / Niche** verdict.
+2. `What about the US market?` → recalls the idea, re-researches the `com` market.
 3. `Pull the reviews of the top-selling one and name the main complaint.`
-   → agent **tool loop** (calls `amazon_product`).
+   → the agent's **ReAct tool loop** fires (calls `amazon_product`).
 4. `Where would a ₹1,299 price sit vs competitors?` → pricing fusion.
 5. Keep chatting until the thread passes 12 messages → the **summarization node** fires
    (`/state` shows the running summary).
 6. **Quit and relaunch** (`uv run python main.py`), same thread, ask
    `What did we decide about the bottle?` → full recall from **Redis** (the checkpointer).
+7. New chat, ask `Have we researched a steel water bottle before?` → recalled from the
+   cross-thread **Store** (long-term memory).
+
+---
+
+## Evaluation
+
+`backend/eval/` evaluates the agent on a **golden dataset of 50 fusion launch-decision
+queries** (India / US / UK, varied price points) with **DeepEval**:
+
+```bash
+uv run --with deepeval python backend/eval/run_eval.py    # writes backend/eval/eval_results.md
+```
+
+Live-agent means across the 50 queries — Verdict Quality **0.85**, Data Fusion **0.76**,
+Faithfulness **0.84**, Answer Relevancy **0.85** (0–1, higher is better).
 
 ---
 
 ## Project structure
 
 ```
-backend/src/launchlens/   config.py llm.py state.py nodes.py graph.py memory.py tools.py
-                          clients/{serpapi,oxylabs}.py   api/app.py (FastAPI)
+backend/src/launchlens/   config.py llm.py state.py nodes.py graph.py memory.py tools.py cache.py
+                          clients/{serpapi,oxylabs}.py   api/app.py (FastAPI SSE)
+backend/eval/             golden_queries.py  run_eval.py  eval_results.md   (DeepEval harness)
+backend/tests/            test_pure.py
 frontend/                 Vite + React chat UI (streaming, verdict cards, research rail)
 cli.py  main.py           entry points (repo root)
-docs/graph.mmd            mermaid diagram (graph.get_graph().draw_mermaid())
-reference/                worked example (marketpulse) — reference only
+graph_out/                architecture diagrams (PNG · Mermaid · draw.io)
+docs/                     LaunchLens-A-Market-Intelligence-System.pdf (slide deck)
+reference/                worked example (marketpulse) — reference only, gitignored
 ```
 
 ## Notes
 
-- **Live by default** (no cache, no fixtures): SerpApi + Oxylabs + the LLM all run live.
-- **Provider-agnostic LLM** via `init_chat_model` — switch OpenAI↔Claude with one env var.
-- **Redis checkpointer** with an automatic **SQLite fallback** if Redis is unreachable,
-  so the project always runs.
-
-## Demo video
-
-📹 _<add Loom/YouTube link here>_
+- **Live data:** SerpApi + Oxylabs + the LLM all run live; provider responses are cached on
+  disk with a TTL (`cache.py`) to spare API quotas — toggle with `CACHE_ENABLED=false`.
+- **Provider-agnostic LLM** via `init_chat_model` — switch OpenAI ↔ Claude with one env var.
+- **Redis checkpointer** with an automatic **SQLite fallback** if Redis is unreachable, so
+  the project always runs.
 
 ## Author
 
