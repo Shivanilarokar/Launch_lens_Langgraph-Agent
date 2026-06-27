@@ -45,7 +45,7 @@ def get_store():
     """Return a long-term, cross-thread Store for facts that outlive a single thread.
 
     Redis-backed if REDIS_URI is set & reachable (facts persist across restarts AND
-    across every thread); otherwise an in-memory store so the graph still runs.
+    across every thread); otherwise SQLite so the graph still runs AND survives restarts.
     """
     if config.REDIS_URI:
         try:
@@ -58,12 +58,22 @@ def get_store():
             logger.info("store: Redis (long-term, cross-thread)")
             return store
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Redis store unavailable (%s); using in-memory store", exc)
+            logger.warning("Redis store unavailable (%s); falling back to SQLite store", exc)
 
-    from langgraph.store.memory import InMemoryStore
+    try:
+        from langgraph.store.sqlite import SqliteStore
 
-    logger.info("store: in-memory (not persistent across restarts)")
-    return InMemoryStore()
+        conn = sqlite3.connect(config.STORE_SQLITE_PATH, check_same_thread=False)
+        store = SqliteStore(conn)
+        store.setup()
+        _open_conns.append(conn)
+        logger.info("store: SQLite (%s) — persists across restarts", config.STORE_SQLITE_PATH)
+        return store
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("SQLite store unavailable (%s); falling back to in-memory store", exc)
+        from langgraph.store.memory import InMemoryStore
+        logger.info("store: in-memory (not persistent across restarts)")
+        return InMemoryStore()
 
 
 def close() -> None:

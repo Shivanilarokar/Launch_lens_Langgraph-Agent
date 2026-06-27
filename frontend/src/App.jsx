@@ -6,10 +6,13 @@ import Verdict from './components/Verdict.jsx'
 import ProductCard from './components/ProductCard.jsx'
 
 const LS_KEY = 'launchlens.convos.v2'
+const LS_DOMAIN_KEY = 'launchlens.domain'
 const DEFAULT_TITLE = 'New chat'
 const uid = () => 'c-' + Math.random().toString(36).slice(2, 10)
 const loadConvos = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || [] } catch { return [] } }
 const saveConvos = (c) => localStorage.setItem(LS_KEY, JSON.stringify(c))
+const loadDomain = () => localStorage.getItem(LS_DOMAIN_KEY) || 'in'
+const saveDomain = (d) => localStorage.setItem(LS_DOMAIN_KEY, d)
 
 const HINTS = [
   'Is it worth launching a portable blender in the US under $40?',
@@ -27,7 +30,7 @@ export default function App() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [markets, setMarkets] = useState([])
-  const [domain, setDomain] = useState('in')
+  const [domain, setDomain] = useState(loadDomain)
   const [memoryFacts, setMemoryFacts] = useState([])
   const [profile, setProfile] = useState({})
   const streamRef = useRef(null)
@@ -38,7 +41,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    api.marketplaces().then((m) => { setMarkets(m.marketplaces || []); setDomain(m.default || 'in') }).catch(() => {})
+    api.marketplaces().then((m) => { setMarkets(m.marketplaces || []) }).catch(() => {})
     refreshMemory()
     setConversations((prev) => {
       if (prev.length) { setActiveId(prev[0].id); return prev }
@@ -120,7 +123,7 @@ export default function App() {
           </div>
           <label className="market">
             Market
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+            <select value={domain} onChange={(e) => { setDomain(e.target.value); saveDomain(e.target.value) }}>
               {markets.map((m) => <option key={m.code} value={m.code}>amazon.{m.code} · {m.currency}</option>)}
             </select>
           </label>

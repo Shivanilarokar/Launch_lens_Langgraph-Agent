@@ -52,6 +52,7 @@ def market(domain: str | None = None) -> dict:
 # ─── Memory / checkpointer ────────────────────────────────────────────────────
 REDIS_URI = os.getenv("REDIS_URI", "")
 SQLITE_PATH = os.getenv("SQLITE_PATH", str(REPO_ROOT / "launchlens_checkpoints.sqlite"))
+STORE_SQLITE_PATH = os.getenv("STORE_SQLITE_PATH", str(REPO_ROOT / "launchlens_store.sqlite"))
 
 # ─── Summarization knobs ──────────────────────────────────────────────────────
 MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", "12"))
