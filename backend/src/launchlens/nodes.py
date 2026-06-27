@@ -147,6 +147,9 @@ Rules:
   conversation so far → followup (keep product_query empty).
 - A greeting, small talk, a question about you/your capabilities, a general
   knowledge question, or the user sharing personal details → chitchat (no research).
+- Asking about THEIR OWN history — "what have I/we researched", "my past searches",
+  "my preferences", "what do you remember about me", "what's my name" → chitchat
+  (answered from long-term memory; no research).
 Always extract a clean product_query for full_report/demand/pricing/reviews intents.
 If the user shares their name or location anywhere in the message, set user_name /
 user_location (otherwise leave them empty).
@@ -303,6 +306,13 @@ or the user just sharing personal info (their name or location), reply briefly a
 warmly as LaunchLens — you help founders decide what to launch by fusing Google demand
 with Amazon supply. Acknowledge any name/location they shared. No VERDICT, no research.
 
+If the founder asks about THEMSELVES — their name, their past searches / research
+history, their saved preferences, or "what do you remember about me" — answer directly
+from the Founder profile and Long-term memory above. Greet them by name if you know it,
+then list the products, markets, and verdicts you have on record (those past searches ARE
+their preferences). If the profile/long-term memory is empty, say you have nothing saved
+yet; otherwise NEVER claim you don't remember. No VERDICT, no research.
+
 If the founder asks an INFORMATIONAL or comparison question (e.g. "what is X",
 "what are the top/different brands", "list competitors", "what's selling") rather
 than a launch decision, just answer it directly and helpfully — name the brands /
@@ -349,7 +359,7 @@ def _recall_facts(runtime: Runtime) -> list[dict]:
     if store is None:
         return []
     try:
-        items = store.search(LONGTERM_NS, limit=5)
+        items = store.search(LONGTERM_NS, limit=25)
         return [it.value for it in items]
     except Exception:  # noqa: BLE001 - long-term memory is best-effort
         return []
