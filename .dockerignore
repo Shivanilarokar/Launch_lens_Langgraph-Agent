@@ -1,0 +1,17 @@
+.git
+.venv
+**/.venv
+node_modules
+**/node_modules
+frontend
+.cache
+**/__pycache__
+*.sqlite
+*.sqlite-*
+.env
+reference
+Deck
+graph_out
+.vscode
+.claude
+.pytest_cache
