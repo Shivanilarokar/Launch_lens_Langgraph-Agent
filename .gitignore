@@ -5,7 +5,7 @@ reference/
 # Secrets
 .env
 **/.env
-1
+
 # Python-generated files
 __pycache__/
 *.py[oc]

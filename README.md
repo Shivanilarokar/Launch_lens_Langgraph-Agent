@@ -15,6 +15,15 @@ across sessions.
 Built on **LangGraph** · Python 3.12 · provider-agnostic LLM (OpenAI or Claude) ·
 **Redis** checkpointer + cross-thread store · CLI + FastAPI streaming API + React UI.
 
+## 🔴 Live demo
+
+- **▶ Try the app:** **https://launch-lens-langgraph-agent.vercel.app**
+- **API:** https://launchlenslanggraph-agent-production.up.railway.app
+- **🎥 Demo video:** [`demo/LaunchLens-demo.mp4`](demo/LaunchLens-demo.mp4)
+
+Frontend on **Vercel** · backend (FastAPI + LangGraph) on **Railway** · Redis on Redis Cloud.
+Deploy config: [`Dockerfile`](Dockerfile) (backend) · [`frontend/vercel.json`](frontend/vercel.json).
+
 ---
 
 ## Architecture
