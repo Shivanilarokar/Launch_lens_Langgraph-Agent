@@ -12,7 +12,7 @@ across sessions.
 > Oxylabs tells you *what's selling*. SerpApi tells you *what the market wants*.
 > LaunchLens connects them — that fusion is the whole product.
 
-Built on **LangGraph** · Python 3.12 · provider-agnostic LLM (OpenAI or Claude) ·
+Built on **LangGraph** · Python 3.12 · OpenAI (provider-agnostic via `init_chat_model`) ·
 **Redis** checkpointer + cross-thread store · CLI + FastAPI streaming API + React UI.
 
 ## 🔴 Live demo
@@ -60,7 +60,7 @@ differentiation angle is grounded in *real* review snippets).
   tool call, so concurrent users on different markets never collide.
 - **Bounded context:** the summarization node caps token growth on long threads.
 - **Config via env:** keys, model, market, and Redis URI are all env-driven; swap the LLM
-  (OpenAI ↔ Claude) or the checkpointer (Redis ↔ SQLite) with no code change.
+  model or the checkpointer (Redis ↔ SQLite) with no code change.
 - **Token discipline:** every tool returns slim JSON, never raw scrapes.
 - **Resilience & cost:** every external node retries transient failures with **exponential
   backoff** (`graph.py:25` `RETRY`); provider responses are **cached** on disk with a TTL
@@ -110,7 +110,7 @@ cd frontend && npm install && cd ..
 ### `.env`
 
 ```ini
-LLM_MODEL=openai:gpt-4o-mini          # or anthropic:claude-haiku-4-5-20251001 (+ ANTHROPIC_API_KEY)
+LLM_MODEL=openai:gpt-4o-mini
 OPENAI_API_KEY=...
 SERPAPI_API_KEY=...                   # demand: Google Trends / Shopping / News
 OXYLABS_USERNAME=...                  # supply: Amazon search / product / pricing / bestsellers
@@ -187,7 +187,7 @@ reference/                worked example (marketpulse) — reference only, gitig
 
 - **Live data:** SerpApi + Oxylabs + the LLM all run live; provider responses are cached on
   disk with a TTL (`cache.py`) to spare API quotas — toggle with `CACHE_ENABLED=false`.
-- **Provider-agnostic LLM** via `init_chat_model` — switch OpenAI ↔ Claude with one env var.
+- **Provider-agnostic LLM** via `init_chat_model` — change the model with one env var.
 - **Redis checkpointer** with an automatic **SQLite fallback** if Redis is unreachable, so
   the project always runs.
 

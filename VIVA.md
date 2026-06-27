@@ -115,7 +115,7 @@ a brand-new chat, ask "did we look at this before?" → it recalls without re-re
 ## Scalability (the "how it scales" answer)
 Stateless app (all state in Redis, keyed by `thread_id`) → run N replicas behind a load
 balancer; no global mutable state (market is passed per-call); env-driven config; swap
-LLM (OpenAI↔Claude) or backend (Redis↔SQLite↔Postgres) with no code change; bounded
+the LLM model or backend (Redis↔SQLite↔Postgres) with no code change; bounded
 context via summarization; slim JSON + caching for cost.
 
 ## If they ask "what would you improve next?"

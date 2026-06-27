@@ -80,6 +80,4 @@ def missing_keys() -> list[str]:
     provider = LLM_MODEL.split(":")[0]
     if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
         missing.append("OPENAI_API_KEY")
-    if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
-        missing.append("ANTHROPIC_API_KEY")
     return missing
